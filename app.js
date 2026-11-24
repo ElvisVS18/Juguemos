@@ -762,14 +762,13 @@ const DEFAULT_SESSIONS = [
 // URL de Google Apps Script compartida por defecto para todo el club (opcional)
 const CLUB_DEFAULT_GSHEET_URL = 'https://script.google.com/macros/s/AKfycbxJmP5-FBNZ66z7fU3-sGaFwLS0Fg36K4OS4tzFKm2BLPqe-NaymzkJ5NQXYdTaE6jK/exec';
 
-// Decoupled DB Layer (localStorage + Google Sheets Cloud Sync)
+// Decoupled DB Layer (Siempre conectado a Google Sheets en la nube)
 const db = {
   getGSheetUrl() {
-    return localStorage.getItem('bg_gsheet_url') || CLUB_DEFAULT_GSHEET_URL || '';
+    return CLUB_DEFAULT_GSHEET_URL;
   },
   setGSheetUrl(url) {
-    if (url) localStorage.setItem('bg_gsheet_url', url.trim());
-    else localStorage.removeItem('bg_gsheet_url');
+    // La app usa permanentemente la base de datos oficial del club
   },
   getFriends() {
     const raw = localStorage.getItem('bg_friends');
@@ -1066,54 +1065,13 @@ const app = {
   },
 
   updateDbStatusUi() {
-    const url = db.getGSheetUrl();
     const icon = document.getElementById('db-status-icon');
     const label = document.getElementById('db-status-label');
-    const banner = document.getElementById('db-active-banner');
-    const input = document.getElementById('input-gsheet-url');
-
-    if (input && url) input.value = url;
-
-    if (url) {
-      if (icon) icon.className = 'fa-solid fa-cloud-check text-emerald-600 text-xs';
-      if (label) label.textContent = 'Sheets Activo';
-      if (banner) {
-        banner.className = 'p-3 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900 flex items-center justify-between text-xs';
-        banner.innerHTML = `
-          <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span class="font-bold">Conectado a Google Sheets</span>
-          </div>
-          <span class="text-[10px] text-emerald-700 font-semibold">Sincronizado</span>
-        `;
-      }
-      const shareSec = document.getElementById('db-share-section');
-      if (shareSec) shareSec.classList.remove('hidden');
-    } else {
-      if (icon) icon.className = 'fa-solid fa-cloud text-slate-400 text-xs';
-      if (label) label.textContent = 'Solo Local';
-      if (banner) {
-        banner.className = 'p-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-700 flex items-center gap-2 text-xs';
-        banner.innerHTML = `
-          <i class="fa-solid fa-hard-drive text-slate-400"></i>
-          <div>
-            <span class="font-bold">Modo Almacenamiento Local</span>
-            <p class="text-[10px] text-slate-400">Los cambios se guardan solo en este dispositivo.</p>
-          </div>
-        `;
-      }
-      const shareSec = document.getElementById('db-share-section');
-      if (shareSec) shareSec.classList.add('hidden');
-    }
+    if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
+    if (label) label.textContent = 'En la Nube';
   },
 
   copyShareLink() {
-    const url = db.getGSheetUrl();
-    if (!url) {
-      alert('Primero conecta tu Google Sheets arriba para poder generar un enlace compartido.');
-      return;
-    }
-
     const shareUrl = this.getShareUrl();
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1121,10 +1079,10 @@ const app = {
         const btnLabel = document.getElementById('btn-copy-share-label');
         if (btnLabel) {
           const orig = btnLabel.textContent;
-          btnLabel.textContent = '¡Enlace Copiado al Portapapeles!';
+          btnLabel.textContent = '¡Enlace Copiado!';
           setTimeout(() => { btnLabel.textContent = orig; }, 2500);
         }
-        alert('¡Enlace copiado! Pégalo en tu grupo de WhatsApp.\n\nCuando tus amigos abran ese enlace en sus celulares, se conectarán a esta misma base de datos sin tener que configurar nada.');
+        alert('¡Enlace copiado! Pégalo en tu grupo de WhatsApp.\n\nCualquier amigo que lo abra entrará conectado automáticamente a la misma base de datos del club.');
       }).catch(() => {
         prompt('Copia este enlace para enviarlo a tus amigos:', shareUrl);
       });
@@ -1133,63 +1091,39 @@ const app = {
     }
   },
 
-  async connectGoogleSheets() {
-    const input = document.getElementById('input-gsheet-url');
-    const url = input?.value?.trim();
-    if (!url || !url.startsWith('https://script.google.com/macros/s/')) {
-      alert('Por favor ingresa una URL válida de Google Apps Script (que comience con https://script.google.com/macros/s/...)');
-      return;
-    }
-
-    db.setGSheetUrl(url);
-    this.updateDbStatusUi();
-
-    const btn = document.getElementById('btn-sync-gsheet');
-    if (btn) btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Conectando...`;
-
-    // Push initial local data to populate the sheet if empty, then sync
-    await db.pushToGoogleSheets();
-    await db.syncWithGoogleSheets();
-
-    if (btn) btn.innerHTML = `<i class="fa-solid fa-rotate"></i><span>Sincronizar</span>`;
-
-    alert('¡Excelente! Tu aplicación ahora está conectada a Google Sheets en la nube. Cualquier cambio que hagan tú o tus amigos se guardará en tu hoja de cálculo.');
-    this.renderGames();
-    this.renderSessions();
-    this.renderFriends();
-    this.closeModal('modal-db-settings');
-  },
-
   async syncGoogleSheetsNow() {
-    const url = db.getGSheetUrl();
-    if (!url) {
-      alert('Primero ingresa la URL y dale a "Conectar Google Sheets".');
-      return;
+    const icon = document.getElementById('db-status-icon');
+    const label = document.getElementById('db-status-label');
+    const btnModal = document.getElementById('btn-modal-sync');
+
+    if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-emerald-600 text-xs';
+    if (label) label.textContent = 'Sincronizando...';
+    if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Sincronizando...</span>`;
+
+    try {
+      await db.syncWithGoogleSheets();
+      await db.pushToGoogleSheets();
+
+      this.renderGames();
+      this.renderSessions();
+      this.renderFriends();
+      this.populateModalSelects();
+      this.updateUserHeader();
+
+      if (icon) icon.className = 'fa-solid fa-check text-emerald-600 text-xs';
+      if (label) label.textContent = 'Al día';
+      if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-check text-emerald-200"></i><span>¡Todo al día!</span>`;
+
+      setTimeout(() => {
+        if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
+        if (label) label.textContent = 'En la Nube';
+        if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-rotate"></i><span>Forzar Sincronización Ahora</span>`;
+      }, 1500);
+    } catch (e) {
+      if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
+      if (label) label.textContent = 'En la Nube';
+      if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-rotate"></i><span>Forzar Sincronización Ahora</span>`;
     }
-
-    const btn = document.getElementById('btn-sync-gsheet');
-    if (btn) btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
-
-    await db.syncWithGoogleSheets();
-    await db.pushToGoogleSheets();
-
-    if (btn) btn.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i>`;
-    setTimeout(() => {
-      if (btn) btn.innerHTML = `<i class="fa-solid fa-rotate"></i><span>Sincronizar</span>`;
-    }, 1500);
-
-    this.renderGames();
-    this.renderSessions();
-    this.renderFriends();
-  },
-
-  disconnectCloudDb() {
-    if (!confirm('¿Deseas desconectar Google Sheets y volver a modo local?')) return;
-    db.setGSheetUrl('');
-    this.updateDbStatusUi();
-    const input = document.getElementById('input-gsheet-url');
-    if (input) input.value = '';
-    alert('Desconectado. Ahora la app usará solo el almacenamiento local de este navegador.');
   },
 
   migrateExistingGames() {
