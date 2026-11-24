@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Mesa de Amigos - Club de Juegos</title>
+  
+  <!-- PWA & Mobile Web App meta tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mesa Amigos">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/806/806131.png">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f5f3ff',
+              100: '#ede9fe',
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              700: '#6d28d9',
+            }
+          },
+          padding: {
+            'safe-bottom': 'env(safe-area-inset-bottom, 16px)'
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    /* Mobile-first tweaks */
+    -webkit-tap-highlight-color: transparent;
+    body {
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior-y: none;
+    }
+    .safe-bottom {
+      padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 1rem));
+    }
+    .safe-top {
+      padding-top: env(safe-area-inset-top, 0.5rem);
+    }
+    /* Bottom Sheet slide-up animation */
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .animate-sheet {
+      animation: slideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    /* Hide scrollbars on pills */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans select-none antialiased">
+
+  <!-- Top Mobile Header -->
+  <header class="bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 safe-top">
+    <div class="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white text-base shadow-sm">
+          <i class="fa-solid fa-dice-d20"></i>
+        </div>
+        <div>
+          <h1 class="font-extrabold text-base leading-tight text-slate-900">Mesa de Amigos</h1>
+          <p class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Noches de Juegos</p>
+        </div>
+      </div>
+
+      <!-- Top Navigation Tabs (Visible directly in header) -->
+      <nav class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/70">
+        <button onclick="app.setTab('sessions')" id="tnav-sessions" class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white text-brand-700 shadow-2xs flex items-center gap-1">
+          <i class="fa-solid fa-dice-d20 text-xs"></i>
+          <span>Sesiones</span>
+        </button>
+        <button onclick="app.setTab('games')" id="tnav-games" class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all text-slate-600 hover:text-brand-600 flex items-center gap-1">
+          <i class="fa-solid fa-chess-rook text-xs"></i>
+          <span>Ludoteca</span>
+        </button>
+        <button onclick="app.setTab('friends')" id="tnav-friends" class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all text-slate-600 hover:text-brand-600 flex items-center gap-1">
+          <i class="fa-solid fa-users text-xs"></i>
+          <span>Amigos</span>
+        </button>
+      </nav>
+
+      <!-- Right Actions: DB Cloud & User Avatar -->
+      <div class="flex items-center gap-2">
+        <!-- DB Sync Button -->
+        <button onclick="app.openModal('modal-db-settings')" class="flex items-center gap-1.5 py-1 px-2.5 rounded-full bg-slate-100 active:bg-slate-200 transition-colors border border-slate-200/60 text-slate-700" title="Configurar Base de Datos en la Nube">
+          <i id="db-status-icon" class="fa-solid fa-cloud text-brand-600 text-xs"></i>
+          <span id="db-status-label" class="text-[11px] font-bold hidden sm:inline">Nube / DB</span>
+        </button>
+
+        <!-- Current User Avatar Button (Opens Mobile Switcher) -->
+        <button onclick="app.openUserSheet()" class="flex items-center gap-2 py-1 px-2.5 rounded-full bg-slate-100 active:bg-slate-200 transition-colors border border-slate-200/60" aria-label="Cambiar usuario">
+          <div id="header-user-avatar" class="w-6 h-6 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px] font-bold">
+            CA
+          </div>
+          <span id="header-user-name" class="text-xs font-bold text-slate-700 max-w-[85px] truncate">Carlos</span>
+          <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Content Container (Padded for mobile bottom nav) -->
+  <main class="flex-1 max-w-2xl w-full mx-auto px-3.5 sm:px-6 py-4 safe-bottom">
+
+    <!-- TAB 1: SESIONES (PRÓXIMAS FECHAS) -->
+    <section id="tab-sessions" class="space-y-4">
+      
+      <!-- Banner with quick action -->
+      <div class="bg-gradient-to-br from-brand-600 via-indigo-600 to-indigo-800 text-white rounded-2xl p-4 sm:p-5 shadow-sm relative overflow-hidden">
+        <div class="relative z-10 space-y-1">
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-bold uppercase tracking-wider">
+            <i class="fa-solid fa-fire text-amber-300"></i> Próximos Encuentros
+          </span>
+          <h2 class="text-xl sm:text-2xl font-black tracking-tight">¿Cuándo jugamos?</h2>
+          <p class="text-brand-100 text-xs leading-relaxed max-w-sm">Revisa las partidas programadas y aparta tu cupo con un toque.</p>
+        </div>
+        <div class="pt-3">
+          <button onclick="app.openModal('modal-session')" class="w-full sm:w-auto px-4 py-2.5 bg-white text-brand-700 font-bold text-xs rounded-xl shadow active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+            <i class="fa-solid fa-calendar-plus"></i>
+            <span>Organizar Nueva Partida</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Feed of Sessions -->
+      <div id="sessions-container" class="space-y-4">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- TAB 2: LUDOTECA (CATÁLOGO DE JUEGOS) -->
+    <section id="tab-games" class="space-y-4 hidden">
+      
+      <!-- Header with Add Button -->
+      <div class="flex items-center justify-between gap-2">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">Ludoteca</h2>
+          <p class="text-xs text-slate-500">Juegos de todo el grupo</p>
+        </div>
+        <button onclick="app.openNewGameModal()" class="px-3.5 py-2 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5">
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span>Nuevo Juego</span>
+        </button>
+      </div>
+
+      <!-- Mobile Search & Filter Chips (Horizontal Scrollable) -->
+      <div class="space-y-2.5">
+        <div class="relative">
+          <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-xs"></i>
+          <input type="text" id="filter-game-search" oninput="app.renderGames()" placeholder="Buscar juego por nombre o tema..." class="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- Filter Chips Carousel -->
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+          <button onclick="app.setPlayerFilter('')" id="chip-all" class="filter-chip px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap bg-brand-600 text-white shadow-sm">Todos</button>
+          <button onclick="app.setPlayerFilter('2')" id="chip-2" class="filter-chip px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap bg-white text-slate-600 border border-slate-200">Para 2</button>
+          <button onclick="app.setPlayerFilter('4')" id="chip-4" class="filter-chip px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap bg-white text-slate-600 border border-slate-200">Acepta 4</button>
+          <button onclick="app.setPlayerFilter('5')" id="chip-5" class="filter-chip px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap bg-white text-slate-600 border border-slate-200">5+ Jugadores</button>
+          <button onclick="app.setPlayerFilter('6')" id="chip-6" class="filter-chip px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap bg-white text-slate-600 border border-slate-200">6+ Fiesta</button>
+        </div>
+      </div>
+
+      <!-- Games List -->
+      <div id="games-container" class="space-y-3">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- TAB 3: AMIGOS (EL GRUPO) -->
+    <section id="tab-friends" class="space-y-4 hidden">
+      <div class="flex items-center justify-between gap-2">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">El Grupo</h2>
+          <p class="text-xs text-slate-500">Amigos activos en el club</p>
+        </div>
+        <button onclick="app.openNewFriendModal()" class="px-3.5 py-2 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5">
+          <i class="fa-solid fa-user-plus text-xs"></i>
+          <span>Agregar Amigo</span>
+        </button>
+      </div>
+
+      <div id="friends-container" class="grid grid-cols-1 gap-2.5">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- NATIVE-LIKE MOBILE BOTTOM NAVIGATION BAR (FIXED) -->
+  <!-- ======================================================== -->
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200 pb-[env(safe-area-inset-bottom,0px)] shadow-lg shadow-slate-900/5">
+    <div class="max-w-md mx-auto grid grid-cols-3 h-16">
+      
+      <!-- Tab 1: Sesiones -->
+      <button onclick="app.setTab('sessions')" id="bnav-sessions" class="flex flex-col items-center justify-center gap-1 text-brand-600 active:scale-95 transition-transform" aria-label="Sesiones">
+        <div class="relative">
+          <i class="fa-solid fa-dice-d20 text-lg"></i>
+          <span id="badge-sessions" class="absolute -top-1 -right-2 w-2 h-2 rounded-full bg-emerald-500 hidden"></span>
+        </div>
+        <span class="text-[11px] font-bold tracking-tight">Sesiones</span>
+      </button>
+
+      <!-- Tab 2: Ludoteca -->
+      <button onclick="app.setTab('games')" id="bnav-games" class="flex flex-col items-center justify-center gap-1 text-slate-400 active:scale-95 transition-transform" aria-label="Ludoteca">
+        <i class="fa-solid fa-chess-rook text-lg"></i>
+        <span class="text-[11px] font-medium tracking-tight">Ludoteca</span>
+      </button>
+
+      <!-- Tab 3: Amigos -->
+      <button onclick="app.setTab('friends')" id="bnav-friends" class="flex flex-col items-center justify-center gap-1 text-slate-400 active:scale-95 transition-transform" aria-label="Amigos">
+        <i class="fa-solid fa-users text-lg"></i>
+        <span class="text-[11px] font-medium tracking-tight">Amigos</span>
+      </button>
+
+    </div>
+  </nav>
+
+  <!-- ======================================================== -->
+  <!-- MOBILE BOTTOM SHEET: USER SWITCHER -->
+  <!-- ======================================================== -->
+  <div id="sheet-user" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeUserSheet()" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl p-5 shadow-2xl max-h-[80vh] overflow-y-auto animate-sheet space-y-4">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2"></div>
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div>
+          <h3 class="font-bold text-base text-slate-900">¿Quién está usando la app?</h3>
+          <p class="text-xs text-slate-500">Selecciona tu perfil para confirmar tus asistencias.</p>
+        </div>
+        <button onclick="app.closeUserSheet()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <div id="user-sheet-list" class="space-y-2">
+        <!-- Rendered by JS -->
+      </div>
+
+      <div class="pt-2 border-t border-slate-100">
+        <button onclick="app.closeUserSheet(); app.openNewFriendModal()" class="w-full py-2.5 bg-brand-50 hover:bg-brand-100 active:bg-brand-200 text-brand-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 border border-dashed border-brand-300 transition-colors">
+          <i class="fa-solid fa-user-plus text-xs"></i>
+          <span>+ Agregar otro amigo al club</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MOBILE BOTTOM SHEET MODAL: CONFIGURAR BASE DE DATOS -->
+  <!-- ======================================================== -->
+  <div id="modal-db-settings" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeModal('modal-db-settings')" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl sm:m-auto sm:max-w-md w-full p-5 shadow-2xl max-h-[90vh] overflow-y-auto animate-sheet space-y-4">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-cloud text-brand-600"></i> Base de Datos Compartida
+        </h3>
+        <button onclick="app.closeModal('modal-db-settings')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3.5 text-xs">
+        <!-- Status Banner -->
+        <div id="db-active-banner" class="p-3 rounded-xl border flex items-center gap-2.5">
+          <!-- Dynamically populated by app.updateDbStatusUi() -->
+        </div>
+
+        <!-- WhatsApp Group Share Link (Shown when Google Sheets is connected) -->
+        <div id="db-share-section" class="hidden bg-gradient-to-r from-brand-50 to-indigo-50 border-2 border-brand-300 rounded-2xl p-3.5 space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-brand-950 font-extrabold text-xs">
+              <i class="fa-solid fa-share-nodes text-brand-600"></i>
+              <span>Compartir con tus Amigos</span>
+            </div>
+            <span class="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">Enlace Mágico</span>
+          </div>
+          <p class="text-[11px] text-slate-600 leading-snug">
+            Copia este enlace y envíalo a tu grupo de WhatsApp. Cuando tus amigos lo abran en su celular, se conectarán a esta misma hoja compartida <strong>sin que ellos tengan que configurar nada</strong>.
+          </p>
+          <button onclick="app.copyShareLink()" class="w-full py-2.5 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2">
+            <i class="fa-brands fa-whatsapp text-sm"></i>
+            <span id="btn-copy-share-label">Copiar Enlace para Compartir</span>
+          </button>
+        </div>
+
+        <!-- Google Sheets Option (Option 2) -->
+        <div class="bg-emerald-50/70 border border-emerald-200/90 rounded-2xl p-4 space-y-2.5">
+          <div class="flex items-center gap-2 text-emerald-900 font-extrabold text-sm">
+            <i class="fa-solid fa-file-excel text-emerald-600 text-base"></i>
+            <span>¿Para qué sirve Google Sheets?</span>
+          </div>
+          <p class="text-slate-600 text-[11px] leading-relaxed">
+            Permite que la información de tus juegos, fechas y asistencias viva en una hoja de Google Drive. Así, lo que agregue o confirme cualquier amigo se refleja en los celulares de todos en tiempo real.
+          </p>
+
+          <div class="space-y-1.5 pt-1">
+            <label class="block font-bold text-slate-700 text-[11px]">Pega aquí la URL de tu Web App de Google Sheets</label>
+            <input type="url" id="input-gsheet-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-white font-mono">
+          </div>
+
+          <div class="flex gap-2 pt-1">
+            <button onclick="app.connectGoogleSheets()" class="flex-1 py-2.5 bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-link"></i>
+              <span>Conectar Google Sheets</span>
+            </button>
+            <button onclick="app.syncGoogleSheetsNow()" id="btn-sync-gsheet" class="px-3 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl active:bg-slate-50 flex items-center justify-center gap-1">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Sincronizar</span>
+            </button>
+          </div>
+
+          <!-- Step-by-Step Accordion Guide -->
+          <details class="group bg-white rounded-xl border border-emerald-200/80 p-2.5 text-xs">
+            <summary class="font-bold text-emerald-900 cursor-pointer flex items-center justify-between select-none text-[11px]">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-question text-emerald-600"></i> ¿Cómo obtener esta URL en 2 minutos?
+              </span>
+              <i class="fa-solid fa-chevron-down text-[10px] text-emerald-600 group-open:rotate-180 transition-transform"></i>
+            </summary>
+            <div class="mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-600 space-y-1.5 leading-relaxed">
+              <p><strong>1.</strong> Entra a <a href="https://sheets.new" target="_blank" class="text-brand-600 underline font-bold">sheets.new</a> para crear una hoja en blanco.</p>
+              <p><strong>2.</strong> En el menú ve a <strong>Extensiones > Apps Script</strong>.</p>
+              <p><strong>3.</strong> Borra el código y pega todo el texto de <code>google-sheets-backend.js</code> (está en tu carpeta).</p>
+              <p><strong>4.</strong> Haz clic en el disquete (Guardar), selecciona la función <code>crearTablasIniciales</code> y dale a <strong>Ejecutar</strong> (creará las pestañas y colores solo).</p>
+              <p><strong>5.</strong> Clic en <strong>Implementar > Nueva implementación</strong> (Engranaje ⚙️ > Aplicación web > Quién tiene acceso: <em>Cualquier usuario</em>) y copia la URL terminada en <code>/exec</code>.</p>
+            </div>
+          </details>
+
+          <div class="text-[10px] text-slate-500 pt-1 border-t border-emerald-200/60 flex items-center justify-between">
+            <span>📄 Código de Google Sheets listo en:</span>
+            <span class="font-mono font-bold text-emerald-800">google-sheets-backend.js</span>
+          </div>
+        </div>
+
+        <!-- Disconnect / Local mode -->
+        <div class="pt-1 flex justify-between items-center text-xs">
+          <span class="text-slate-400 text-[11px]">Modo de almacenamiento:</span>
+          <button onclick="app.disconnectCloudDb()" class="text-rose-600 font-bold hover:underline text-xs flex items-center gap-1">
+            <i class="fa-solid fa-power-off text-[10px]"></i> Desconectar y usar solo Local
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MOBILE BOTTOM SHEET MODAL: NUEVA SESIÓN -->
+  <!-- ======================================================== -->
+  <div id="modal-session" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeModal('modal-session')" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl sm:m-auto sm:max-w-md w-full p-5 shadow-2xl max-h-[90vh] overflow-y-auto animate-sheet space-y-4">
+      
+      <!-- Grab handle for mobile -->
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-calendar-plus text-brand-600"></i> Planear Noche de Juego
+        </h3>
+        <button onclick="app.closeModal('modal-session')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <form id="form-new-session" onsubmit="app.handleCreateSession(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Juego a Jugar</label>
+          <select id="session-game-id" required class="w-full border border-slate-300 rounded-xl p-3 text-xs bg-slate-50 font-medium focus:ring-2 focus:ring-brand-500">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Fecha</label>
+            <input type="date" id="session-date" required class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-slate-50 font-medium">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Hora</label>
+            <input type="time" id="session-time" required value="19:30" class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-slate-50 font-medium">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Lugar (Casa / Dirección)</label>
+          <input type="text" id="session-location" placeholder="Ej. Casa de Carlos (Sala)" required class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-slate-50 font-medium">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Notas o Piqueos (opcional)</label>
+          <textarea id="session-notes" rows="2" placeholder="Ej. Traer snacks, gaseosas, empezamos puntual..." class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-slate-50 font-medium"></textarea>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-bold text-sm rounded-xl shadow-md flex items-center justify-center gap-2">
+            <i class="fa-solid fa-check"></i>
+            <span>Publicar Partida</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MOBILE BOTTOM SHEET MODAL: AGREGAR JUEGO -->
+  <!-- ======================================================== -->
+  <div id="modal-game" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeModal('modal-game')" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl sm:m-auto sm:max-w-md w-full p-5 shadow-2xl max-h-[90vh] overflow-y-auto animate-sheet space-y-4">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-chess-knight text-brand-600"></i>
+          <span id="modal-game-heading">Registrar Juego</span>
+        </h3>
+        <button onclick="app.closeModal('modal-game')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body Form: Search-First & 100% Automated -->
+      <form id="form-new-game" onsubmit="app.handleCreateOrUpdateGame(event)" class="space-y-3.5 text-xs">
+        <input type="hidden" id="game-edit-id" value="">
+        
+        <!-- Search & Auto-Import Box -->
+        <div class="bg-gradient-to-r from-brand-50 to-indigo-50 p-3.5 rounded-2xl border border-brand-200 space-y-2 relative">
+          <label class="block font-black text-brand-950 text-xs flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <i class="fa-solid fa-wand-magic-sparkles text-brand-600"></i> Buscar Juego en la Web
+            </span>
+            <span class="text-[10px] text-brand-600 font-bold bg-brand-100/70 px-2 py-0.5 rounded-full">Sugerencias en vivo</span>
+          </label>
+          <div class="flex gap-1.5">
+            <div class="relative flex-1">
+              <input type="text" id="game-magic-query" 
+                     oninput="app.handleGameSearchInput(this.value)"
+                     onfocus="app.handleGameSearchInput(this.value)"
+                     onkeydown="if(event.key === 'Enter'){ event.preventDefault(); app.searchAndAutofillGame(); }" 
+                     placeholder="Escribe ej. C, Catan, Wingspan, Nemesis..." 
+                     autocomplete="off"
+                     class="w-full pl-8 pr-8 py-2.5 text-xs rounded-xl border border-brand-200 bg-white font-semibold focus:ring-2 focus:ring-brand-500 shadow-2xs">
+              <i class="fa-solid fa-search absolute left-2.5 top-3 text-slate-400 text-xs"></i>
+              <button type="button" id="btn-clear-query" onclick="app.clearGameSearchInput()" class="hidden absolute right-2.5 top-2.5 w-5 h-5 rounded-full bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center text-[10px]">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <button type="button" id="btn-magic-search" onclick="app.searchAndAutofillGame()" class="px-4 py-2.5 bg-brand-600 active:bg-brand-700 text-white rounded-xl font-black text-xs flex items-center gap-1.5 shrink-0 shadow-sm">
+              <i class="fa-solid fa-bolt"></i>
+              <span>Buscar</span>
+            </button>
+          </div>
+
+          <!-- Suggestions Dropdown (Live autocomplete as user types) -->
+          <div id="game-suggestions-box" class="hidden bg-white border border-brand-200 rounded-2xl shadow-xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-slate-100 transition-all">
+            <!-- Populated dynamically via JS -->
+          </div>
+
+          <p class="text-[10px] text-slate-500">
+            Escribe una letra o nombre para ver opciones y jalar la <strong>portada oficial, jugadores, duración y reseña</strong>.
+          </p>
+        </div>
+
+        <!-- Live Extracted Data Card (Shown when game is found) -->
+        <div id="game-extracted-card" class="hidden bg-white p-3.5 rounded-2xl border-2 border-emerald-500/40 shadow-sm space-y-2.5 transition-all">
+          <div class="flex items-center justify-between text-emerald-800 text-[11px] font-bold border-b border-slate-100 pb-1.5">
+            <span class="flex items-center gap-1">
+              <i class="fa-solid fa-circle-check text-emerald-600"></i>
+              <span>¡Datos extraídos de internet con éxito!</span>
+            </span>
+            <span class="text-[10px] text-slate-400 font-normal">Listo para guardar</span>
+          </div>
+
+          <div class="flex gap-3">
+            <img id="game-extracted-img" src="" alt="Portada" class="w-20 h-24 rounded-xl object-cover bg-slate-900 shrink-0 shadow-xs">
+            <div class="flex-1 min-w-0 space-y-1">
+              <h4 id="game-extracted-title" class="font-extrabold text-sm text-slate-900 truncate">Título</h4>
+              <div class="flex flex-wrap gap-1.5 pt-0.5">
+                <span id="game-extracted-players" class="inline-flex items-center gap-1 bg-brand-50 text-brand-700 font-bold text-[10px] px-2 py-0.5 rounded-md border border-brand-100">
+                  <i class="fa-solid fa-users text-[9px]"></i> 2-4 jug.
+                </span>
+                <span id="game-extracted-duration" class="inline-flex items-center gap-1 bg-amber-50 text-amber-800 font-bold text-[10px] px-2 py-0.5 rounded-md border border-amber-100">
+                  <i class="fa-solid fa-stopwatch text-[9px]"></i> 60m
+                </span>
+              </div>
+              <p id="game-extracted-desc" class="text-[11px] text-slate-600 line-clamp-2 leading-tight pt-0.5 italic">
+                Reseña...
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Owner Selector (The ONLY field user needs to choose) -->
+        <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-1">
+          <label class="block font-bold text-slate-800 text-xs">
+            <i class="fa-solid fa-user-tag text-brand-600 mr-1"></i> ¿Quién es el dueño del juego en el grupo?
+          </label>
+          <select id="game-owner-id" required class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-white font-semibold focus:ring-2 focus:ring-brand-500">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+
+        <!-- Collapsible Details (For optional manual adjustments if desired) -->
+        <details class="group bg-slate-50 rounded-2xl border border-slate-200 text-xs overflow-hidden">
+          <summary class="p-3 font-bold text-slate-600 cursor-pointer flex items-center justify-between select-none">
+            <span class="flex items-center gap-1.5 text-[11px]">
+              <i class="fa-solid fa-sliders text-slate-400"></i> Ajustar datos manualmente (opcional)
+            </span>
+            <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 group-open:rotate-180 transition-transform"></i>
+          </summary>
+
+          <div class="p-3 pt-0 space-y-3 border-t border-slate-200/60 bg-white">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Nombre</label>
+              <input type="text" id="game-title" placeholder="Ej. Wingspan" required class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Jugadores Mín.</label>
+                <input type="number" id="game-min" min="1" max="20" value="2" required class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium">
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Jugadores Máx.</label>
+                <input type="number" id="game-max" min="1" max="30" value="4" required class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium">
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Duración (minutos)</label>
+              <input type="number" id="game-duration" step="15" value="60" required class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium">
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">URL de Portada</label>
+              <div class="flex gap-2">
+                <input type="url" id="game-image" oninput="app.updateImagePreview(this.value)" placeholder="https://..." class="flex-1 border border-slate-300 rounded-xl p-2 text-xs bg-slate-50">
+                <label class="cursor-pointer px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 flex items-center gap-1 shrink-0">
+                  <i class="fa-solid fa-camera"></i>
+                  <span>Foto</span>
+                  <input type="file" id="game-file-input" accept="image/*" onchange="app.handleFileUpload(event)" class="hidden">
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Reseña</label>
+              <textarea id="game-desc" rows="3" placeholder="Reseña, temática y mecánicas..." class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium"></textarea>
+            </div>
+          </div>
+        </details>
+
+        <div class="pt-2">
+          <button type="submit" class="w-full py-3.5 bg-brand-600 active:bg-brand-700 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span id="btn-save-game-label">Guardar en Ludoteca</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MOBILE BOTTOM SHEET MODAL: DETALLE Y RESEÑA DE JUEGO -->
+  <!-- ======================================================== -->
+  <div id="modal-game-detail" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeModal('modal-game-detail')" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl sm:m-auto sm:max-w-md w-full p-5 shadow-2xl max-h-[90vh] overflow-y-auto animate-sheet space-y-4">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <!-- Top bar -->
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-brand-600 bg-brand-50 px-2.5 py-0.5 rounded-full">
+          Ficha del Juego
+        </span>
+        <button onclick="app.closeModal('modal-game-detail')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Detail Body Container -->
+      <div id="game-detail-content" class="space-y-4">
+        <!-- Rendered dynamically by app.showGameDetail(gameId) -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MOBILE BOTTOM SHEET MODAL: AGREGAR / EDITAR AMIGO -->
+  <!-- ======================================================== -->
+  <div id="modal-friend" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeModal('modal-friend')" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl sm:m-auto sm:max-w-sm w-full p-5 shadow-2xl animate-sheet space-y-4">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+          <span id="modal-friend-icon"><i class="fa-solid fa-user-plus text-brand-600"></i></span>
+          <span id="modal-friend-heading">Agregar Amigo al Club</span>
+        </h3>
+        <button onclick="app.closeModal('modal-friend')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <form id="form-new-friend" onsubmit="app.handleSaveFriend(event)" class="space-y-3.5 text-xs">
+        <input type="hidden" id="friend-id" value="">
+        
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Nombre o Apodo</label>
+          <input type="text" id="friend-name" placeholder="Ej. Rodrigo, Laura, etc." required class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-slate-50 font-bold focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Color de Avatar</label>
+          <select id="friend-color" class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-slate-50 font-semibold focus:ring-2 focus:ring-brand-500">
+            <option value="bg-violet-600">🟣 Violeta</option>
+            <option value="bg-rose-500">🔴 Rosa / Carmín</option>
+            <option value="bg-blue-600">🔵 Azul Marino</option>
+            <option value="bg-emerald-600">🟢 Esmeralda</option>
+            <option value="bg-amber-500">🟠 Ámbar / Naranja</option>
+            <option value="bg-teal-600">🔷 Verde azulado</option>
+            <option value="bg-indigo-600">🟣 Índigo profundo</option>
+            <option value="bg-fuchsia-600">🌸 Fucsia</option>
+            <option value="bg-red-600">🔺 Rojo Pasión</option>
+            <option value="bg-cyan-600">💎 Cian Brillante</option>
+          </select>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2">
+            <i class="fa-solid fa-check"></i>
+            <span id="btn-save-friend-label">Registrar Amigo</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js?v=11"></script>
+</body>
+</html>
