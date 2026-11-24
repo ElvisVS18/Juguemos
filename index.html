@@ -385,6 +385,21 @@
           </div>
         </div>
 
+        <!-- URL Input & Connect Box -->
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+          <label class="block font-bold text-slate-700 text-xs flex items-center justify-between">
+            <span><i class="fa-solid fa-link text-brand-600 mr-1"></i> URL de Web App (Google Apps Script)</span>
+            <span class="text-[10px] text-brand-600 font-bold">Oficial</span>
+          </label>
+          <input type="url" id="input-custom-gsheet-url" 
+                 placeholder="https://script.google.com/macros/s/.../exec"
+                 class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-white font-mono text-slate-700 focus:ring-2 focus:ring-brand-500">
+          <button onclick="app.saveCustomGSheetUrl()" id="btn-save-custom-url" class="w-full py-2.5 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2">
+            <i class="fa-solid fa-plug"></i>
+            <span>Conectar y Probar</span>
+          </button>
+        </div>
+
         <!-- Sync Buttons Row -->
         <div class="space-y-2">
           <button onclick="app.pushLocalToCloud()" id="btn-modal-push" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all">
@@ -670,6 +685,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=26"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>

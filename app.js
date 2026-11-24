@@ -760,16 +760,24 @@ const DEFAULT_SESSIONS = [
 ];
 
 // URL de Google Apps Script compartida por defecto para todo el club (opcional)
-const CLUB_DEFAULT_GSHEET_URL = 'https://script.google.com/macros/s/AKfycbxJmP5-FBNZ66z7fU3-sGaFwLS0Fg36K4OS4tzFKm2BLPqe-NaymzkJ5NQXYdTaE6jK/exec';
+const CLUB_DEFAULT_GSHEET_URL = 'https://script.google.com/macros/s/AKfycbxNSwbeR5Jdy9bP0pSHLqyka9unTXdj4fchIA4vI9r3WbrFzKx2qizxLkZBculCXm0P/exec';
 
 // Decoupled DB Layer (Siempre conectado a Google Sheets en la nube)
 const db = {
   isCloudOnline: false,
   getGSheetUrl() {
-    return CLUB_DEFAULT_GSHEET_URL;
+    const saved = localStorage.getItem('bg_gsheet_url');
+    // Si tenía guardada la URL anterior, migrar automáticamente a la nueva
+    if (saved && saved.includes('AKfycbxJmP5-FBNZ66z7fU3')) {
+      localStorage.setItem('bg_gsheet_url', CLUB_DEFAULT_GSHEET_URL);
+      return CLUB_DEFAULT_GSHEET_URL;
+    }
+    return saved || CLUB_DEFAULT_GSHEET_URL;
   },
   setGSheetUrl(url) {
-    // La app usa permanentemente la base de datos oficial del club
+    if (url && typeof url === 'string' && url.trim().startsWith('https://script.google.com/macros/s/')) {
+      localStorage.setItem('bg_gsheet_url', url.trim());
+    }
   },
   getFriends() {
     const raw = localStorage.getItem('bg_friends');
@@ -1719,6 +1727,42 @@ const app = {
       d.setDate(d.getDate() + 3);
       document.getElementById('session-date').value = d.toISOString().split('T')[0];
     }
+    if (modalId === 'modal-db-settings') {
+      const input = document.getElementById('input-custom-gsheet-url');
+      if (input) input.value = db.getGSheetUrl();
+      this.updateDbStatusUi();
+    }
+  },
+
+  async saveCustomGSheetUrl() {
+    const input = document.getElementById('input-custom-gsheet-url');
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val || !val.startsWith('https://script.google.com/macros/s/')) {
+      alert('Por favor pega una URL válida de Google Apps Script que empiece con https://script.google.com/macros/s/ y termine en /exec');
+      return;
+    }
+    db.setGSheetUrl(val);
+    const btn = document.getElementById('btn-save-custom-url');
+    if (btn) btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Conectando...</span>`;
+
+    const success = await db.syncWithGoogleSheets();
+    if (db.isCloudOnline) {
+      this.updateDbStatusUi();
+      this.renderGames();
+      this.renderSessions();
+      this.renderFriends();
+      if (btn) btn.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i><span>¡Conectado con éxito!</span>`;
+      alert('¡Excelente! Conexión exitosa con Google Sheets.\n\nTodos los datos ahora se sincronizan en tiempo real.');
+    } else {
+      this.updateDbStatusUi();
+      if (btn) btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i><span>Sin respuesta</span>`;
+      alert('La URL fue guardada pero Google Sheets no respondió.\n\nAsegúrate de que en la configuración de la Web App en Apps Script, "Quién tiene acceso" esté en "Cualquier usuario" (Anyone).');
+    }
+
+    setTimeout(() => {
+      if (btn) btn.innerHTML = `<i class="fa-solid fa-plug"></i><span>Conectar y Probar</span>`;
+    }, 3000);
   },
 
   async fetchWikiCover(title) {
