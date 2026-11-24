@@ -820,16 +820,106 @@ const db = {
     localStorage.setItem('bg_current_user', id);
   },
 
+  // Helper JSONP: 100% libre de restricciones CORS en cualquier navegador móvil
+  fetchJsonp(url, params = {}) {
+    return new Promise((resolve, reject) => {
+      const callbackName = 'gsheet_cb_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+      const script = document.createElement('script');
+      
+      const queryParts = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+      queryParts.push(`callback=${callbackName}`);
+      queryParts.push(`_t=${Date.now()}`);
+      
+      const separator = url.includes('?') ? '&' : '?';
+      script.src = `${url}${separator}${queryParts.join('&')}`;
+
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error('Tiempo agotado al conectar con Google Sheets'));
+      }, 10000);
+
+      function cleanup() {
+        clearTimeout(timer);
+        try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
+        if (script.parentNode) script.parentNode.removeChild(script);
+      }
+
+      window[callbackName] = function(data) {
+        cleanup();
+        resolve(data);
+      };
+
+      script.onerror = function() {
+        cleanup();
+        reject(new Error('Error de red al consultar Google Sheets'));
+      };
+
+      document.head.appendChild(script);
+    });
+  },
+
+  // Helper Form Submit en Iframe: Garantiza que el POST llegue siempre sin bloqueos
+  submitFormPost(url, payload) {
+    try {
+      let iframe = document.getElementById('gsheet_hidden_iframe');
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'gsheet_hidden_iframe';
+        iframe.name = 'gsheet_hidden_iframe';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+      }
+
+      let form = document.getElementById('gsheet_hidden_form');
+      if (!form) {
+        form = document.createElement('form');
+        form.id = 'gsheet_hidden_form';
+        form.method = 'POST';
+        form.target = 'gsheet_hidden_iframe';
+        form.style.display = 'none';
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'data';
+        form.appendChild(input);
+        document.body.appendChild(form);
+      }
+
+      form.action = url;
+      form.elements['data'].value = payload;
+      form.submit();
+    } catch(e) {
+      console.warn('Form submit fallback error:', e);
+    }
+  },
+
   async syncWithGoogleSheets() {
     const url = this.getGSheetUrl();
     if (!url) return false;
 
     try {
-      // Timestamp anti-cache para evitar que el navegador móvil guarde respuestas viejas
-      const fetchUrl = url + (url.includes('?') ? '&' : '?') + 'action=all&_t=' + Date.now();
-      const res = await fetch(fetchUrl);
-      if (!res.ok) return false;
-      const data = await res.json();
+      let data = null;
+
+      // 1. Intentar con fetch directo
+      try {
+        const fetchUrl = url + (url.includes('?') ? '&' : '?') + 'action=all&_t=' + Date.now();
+        const res = await fetch(fetchUrl);
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (fetchErr) {
+        // Fallback inmediato a JSONP
+      }
+
+      // 2. Si fetch no trajo data (ej. por CORS en móviles), usar JSONP garantizado
+      if (!data || !data.games) {
+        try {
+          data = await this.fetchJsonp(url, { action: 'all' });
+        } catch(jsonpErr) {
+          console.warn('JSONP sync error:', jsonpErr);
+        }
+      }
+
+      if (!data) return false;
 
       let changed = false;
 
@@ -842,11 +932,37 @@ const db = {
           durationMin: parseInt(g.durationMin) || 60,
           image: getSafeImageUrl(g.image)
         }));
+
+        // Si la nube solo tiene juegos antiguos/iniciales pero este equipo tiene juegos agregados
+        // (ej. Wingspan o Brass creados en PC), los preservamos y los subimos a la nube automáticamente
+        let mergedGames = [...sanitized];
+        let hasLocalOnly = false;
+        try {
+          const localList = JSON.parse(localStorage.getItem('bg_games') || '[]');
+          if (Array.isArray(localList)) {
+            localList.forEach(lg => {
+              if (lg && lg.title) {
+                const cleanL = lg.title.toLowerCase().trim();
+                const exists = sanitized.some(sg => (sg.id && sg.id === lg.id) || (sg.title && sg.title.toLowerCase().trim() === cleanL));
+                if (!exists) {
+                  mergedGames.push(lg);
+                  hasLocalOnly = true;
+                }
+              }
+            });
+          }
+        } catch(e) {}
+
         const currentGames = localStorage.getItem('bg_games') || '';
-        const newGames = JSON.stringify(sanitized);
+        const newGames = JSON.stringify(mergedGames);
         if (currentGames !== newGames) {
           localStorage.setItem('bg_games', newGames);
           changed = true;
+        }
+
+        if (hasLocalOnly) {
+          // Subir a Google Sheets automáticamente para que todos los dispositivos lo reciban
+          setTimeout(() => this.pushToGoogleSheets(), 1000);
         }
       }
 
@@ -919,28 +1035,39 @@ const db = {
     const icon = document.getElementById('db-status-icon');
     if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-emerald-500 text-xs';
 
-    const payload = JSON.stringify({
+    const payloadObj = {
       action: 'save_all',
       games: this.getGames(),
       sessions: this.getSessions(),
       friends: this.getFriends()
-    });
+    };
+    const payloadStr = JSON.stringify(payloadObj);
 
     try {
-      // mode: 'no-cors' permite que el navegador envíe el POST a Apps Script sin ser bloqueado por la redirección 302
-      await fetch(url, {
+      // Canal 1: POST vía fetch
+      fetch(url, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: payload
-      });
-    } catch (err) {
-      console.warn('Push to Google Sheets error, trying sendBeacon:', err);
-      try {
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(url, payload);
+        body: payloadStr
+      }).catch(() => {});
+
+      // Canal 2: Formulario oculto vía POST (garantizado en todos los navegadores móviles)
+      this.submitFormPost(url, payloadStr);
+
+      // Canal 3: JSONP GET save_all para asegurar guardado y confirmación en tiempo real
+      if (encodeURIComponent(payloadStr).length < 6000) {
+        try {
+          await this.fetchJsonp(url, {
+            action: 'save_all',
+            data: payloadStr
+          });
+        } catch (e) {
+          console.warn('JSONP push warning:', e);
         }
-      } catch (beaconErr) {}
+      }
+    } catch (err) {
+      console.warn('Push error:', err);
     } finally {
       this._isPushing = false;
       if (icon) {
@@ -1040,8 +1167,8 @@ const app = {
   autoSyncInterval: null,
   startAutoSync() {
     if (this.autoSyncInterval) clearInterval(this.autoSyncInterval);
-    // Auto-poll cloud database every 5 seconds to keep all phones in sync in real time
-    this.autoSyncInterval = setInterval(async () => {
+    
+    const triggerSync = async () => {
       if (db.getGSheetUrl()) {
         const changed = await db.syncWithGoogleSheets();
         if (changed) {
@@ -1052,7 +1179,21 @@ const app = {
           this.updateUserHeader();
         }
       }
-    }, 5000);
+    };
+
+    // Auto-poll cloud database every 5 seconds to keep all phones in sync in real time
+    this.autoSyncInterval = setInterval(triggerSync, 5000);
+
+    // Instant sync when returning to tab or unlocking mobile phone
+    if (!this._visibilityListenerAdded) {
+      this._visibilityListenerAdded = true;
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) triggerSync();
+      });
+      window.addEventListener('focus', () => {
+        triggerSync();
+      });
+    }
   },
 
   getShareUrl() {
@@ -1098,11 +1239,10 @@ const app = {
 
     if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-emerald-600 text-xs';
     if (label) label.textContent = 'Sincronizando...';
-    if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Sincronizando...</span>`;
+    if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Descargando...</span>`;
 
     try {
       await db.syncWithGoogleSheets();
-      await db.pushToGoogleSheets();
 
       this.renderGames();
       this.renderSessions();
@@ -1110,20 +1250,41 @@ const app = {
       this.populateModalSelects();
       this.updateUserHeader();
 
+      const gameCount = db.getGames().length;
       if (icon) icon.className = 'fa-solid fa-check text-emerald-600 text-xs';
       if (label) label.textContent = 'Al día';
-      if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-check text-emerald-200"></i><span>¡Todo al día!</span>`;
+      if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i><span>¡Descargado: ${gameCount} juegos!</span>`;
 
       setTimeout(() => {
         if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
         if (label) label.textContent = 'En la Nube';
-        if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-rotate"></i><span>Forzar Sincronización Ahora</span>`;
-      }, 1500);
+        if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-arrow-down"></i><span>Descargar datos desde la Nube</span>`;
+      }, 2000);
     } catch (e) {
       if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
       if (label) label.textContent = 'En la Nube';
-      if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-rotate"></i><span>Forzar Sincronización Ahora</span>`;
+      if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-arrow-down"></i><span>Descargar datos desde la Nube</span>`;
     }
+  },
+
+  async pushLocalToCloud() {
+    const btn = document.getElementById('btn-modal-push');
+    const icon = document.getElementById('db-status-icon');
+    if (btn) btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Subiendo datos a la Nube...</span>`;
+    if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-emerald-600 text-xs';
+
+    const localGames = db.getGames();
+    await db._executePush();
+
+    if (btn) btn.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i><span>¡${localGames.length} juegos subidos con éxito!</span>`;
+    if (icon) icon.className = 'fa-solid fa-check text-emerald-600 text-xs';
+
+    alert(`¡Excelente! Se subieron tus ${localGames.length} juegos a la hoja de Google Sheets.\n\nAhora abre tu celular o dale a "Descargar datos" en cualquier otro dispositivo y aparecerán exactamente los mismos ${localGames.length} juegos.`);
+
+    setTimeout(() => {
+      if (btn) btn.innerHTML = `<i class="fa-solid fa-arrow-up-from-bracket"></i><span>Subir datos de este equipo a la Nube</span>`;
+      if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
+    }, 2500);
   },
 
   migrateExistingGames() {

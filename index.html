@@ -385,11 +385,18 @@
           </div>
         </div>
 
-        <!-- Sync Button -->
-        <button onclick="app.syncGoogleSheetsNow()" id="btn-modal-sync" class="w-full py-3 bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all">
-          <i class="fa-solid fa-rotate"></i>
-          <span>Forzar Sincronización Ahora</span>
-        </button>
+        <!-- Sync Buttons Row -->
+        <div class="space-y-2">
+          <button onclick="app.pushLocalToCloud()" id="btn-modal-push" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all">
+            <i class="fa-solid fa-arrow-up-from-bracket"></i>
+            <span>Subir datos de este equipo a la Nube</span>
+          </button>
+
+          <button onclick="app.syncGoogleSheetsNow()" id="btn-modal-sync" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 flex items-center justify-center gap-2 transition-all">
+            <i class="fa-solid fa-arrow-down"></i>
+            <span>Descargar datos desde la Nube</span>
+          </button>
+        </div>
 
         <!-- WhatsApp Group Share Link -->
         <div class="bg-gradient-to-r from-brand-50 to-indigo-50 border border-brand-200 rounded-2xl p-3.5 space-y-2">
@@ -663,6 +670,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=24"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>
