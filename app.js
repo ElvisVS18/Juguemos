@@ -1,10 +1,52 @@
+// Iconic Board Game Meeple Palette (12 Distinct Colors)
+const MEEPLE_COLORS = [
+  { id: 'bg-red-600', name: 'Rojo', hex: '#dc2626' },
+  { id: 'bg-blue-600', name: 'Azul', hex: '#2563eb' },
+  { id: 'bg-emerald-600', name: 'Verde', hex: '#059669' },
+  { id: 'bg-amber-500', name: 'Amarillo', hex: '#d97706' },
+  { id: 'bg-violet-600', name: 'Morado', hex: '#7c3aed' },
+  { id: 'bg-orange-500', name: 'Naranja', hex: '#ea580c' },
+  { id: 'bg-slate-800', name: 'Negro', hex: '#1e293b' },
+  { id: 'bg-cyan-600', name: 'Cian', hex: '#0891b2' },
+  { id: 'bg-rose-500', name: 'Rosa', hex: '#e11d48' },
+  { id: 'bg-teal-600', name: 'Teal', hex: '#0d9488' },
+  { id: 'bg-amber-800', name: 'Café', hex: '#78350f' },
+  { id: 'bg-slate-400', name: 'Gris', hex: '#94a3b8' }
+];
+
+// SVG generator for classic board game Meeples (Carcassonne style)
+function getMeepleSvg(colorKeyOrHex, size = 22) {
+  const map = {
+    'bg-red-600': '#dc2626',
+    'bg-blue-600': '#2563eb',
+    'bg-blue-500': '#2563eb',
+    'bg-emerald-600': '#059669',
+    'bg-emerald-500': '#059669',
+    'bg-amber-500': '#d97706',
+    'bg-violet-600': '#7c3aed',
+    'bg-orange-500': '#ea580c',
+    'bg-slate-800': '#1e293b',
+    'bg-cyan-600': '#0891b2',
+    'bg-rose-500': '#e11d48',
+    'bg-teal-600': '#0d9488',
+    'bg-amber-800': '#78350f',
+    'bg-slate-400': '#94a3b8',
+    'bg-fuchsia-600': '#c026d3'
+  };
+  const fill = map[colorKeyOrHex] || colorKeyOrHex || '#dc2626';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="${fill}" class="shrink-0 inline-block drop-shadow-2xs" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
+    <circle cx="50" cy="22" r="14"/>
+    <path d="M 33 42 C 21 42 12 53 12 65 C 12 71 17 73 21 73 C 26 73 29 67 33 66 C 35 77 34 86 33 96 L 47 96 L 49 74 L 51 74 L 53 96 L 67 96 C 66 86 65 77 67 66 C 71 67 74 73 79 73 C 83 73 88 71 88 65 C 88 53 79 42 67 42 Z"/>
+  </svg>`;
+}
+
 // Default mock data for first load
 const DEFAULT_FRIENDS = [
-  { id: 'u1', name: 'Carlos (Tú)', color: 'bg-violet-600', initials: 'CA' },
-  { id: 'u2', name: 'Sofía', color: 'bg-rose-500', initials: 'SO' },
-  { id: 'u3', name: 'Mateo', color: 'bg-blue-500', initials: 'MA' },
-  { id: 'u4', name: 'Valeria', color: 'bg-emerald-500', initials: 'VA' },
-  { id: 'u5', name: 'Diego', color: 'bg-amber-500', initials: 'DI' }
+  { id: 'u1', name: 'Elvis', color: 'bg-red-600', initials: 'EL' },
+  { id: 'u2', name: 'Sofía', color: 'bg-blue-600', initials: 'SO' },
+  { id: 'u3', name: 'Mateo', color: 'bg-emerald-600', initials: 'MA' },
+  { id: 'u4', name: 'Valeria', color: 'bg-amber-500', initials: 'VA' },
+  { id: 'u5', name: 'Diego', color: 'bg-violet-600', initials: 'DI' }
 ];
 
 // Curated database with instant metadata, reviews & REAL official box art
@@ -800,12 +842,12 @@ const app = {
     if (!localStorage.getItem('bg_games')) db.saveGames(DEFAULT_GAMES);
     if (!localStorage.getItem('bg_sessions')) db.saveSessions(DEFAULT_SESSIONS);
 
-    // Auto-migrate any existing games in localStorage with official high-res covers & reviews
-    this.migrateExistingGames();
-
-    // If Google Sheets is configured, pull fresh data from the cloud
-    if (db.getGSheetUrl()) {
-      await db.syncWithGoogleSheets();
+    // Update initial test user from Carlos to Elvis if present
+    const existingFriends = db.getFriends();
+    if (existingFriends && existingFriends.length > 0 && existingFriends[0].name.includes('Carlos')) {
+      existingFriends[0].name = 'Elvis';
+      existingFriends[0].color = 'bg-red-600';
+      db.saveFriends(existingFriends);
     }
 
     this.currentUserId = db.getCurrentUserId();
@@ -813,6 +855,37 @@ const app = {
     this.updateDbStatusUi();
     this.populateModalSelects();
     this.setTab('sessions');
+
+    // INSTANT GATE: Show login/selection immediately at 0ms if not logged in this session
+    if (!sessionStorage.getItem('bg_user_entered')) {
+      this.openUserGate(false);
+    } else {
+      this.closeUserGate();
+    }
+
+    // Auto-migrate any existing games in localStorage with official high-res covers & reviews
+    this.migrateExistingGames();
+
+    // Sync with Google Sheets in the background without blocking the UI
+    if (db.getGSheetUrl()) {
+      db.syncWithGoogleSheets().then(changed => {
+        if (changed) {
+          this.updateUserHeader();
+          this.populateModalSelects();
+          if (this.currentTab === 'sessions') this.renderSessions();
+          if (this.currentTab === 'games') this.renderGames();
+          if (this.currentTab === 'friends') this.renderFriends();
+          const gate = document.getElementById('gate-screen');
+          if (gate && !gate.classList.contains('hidden') && !document.documentElement.classList.contains('user-entered')) {
+            this.populateGateSelect();
+            if (this.gateMode === 'register') {
+              this.renderGateNewMeeplePalette();
+            }
+          }
+        }
+      });
+    }
+
     this.startAutoSync();
   },
 
@@ -995,30 +1068,17 @@ const app = {
     this.currentTab = tab;
     ['sessions', 'games', 'friends'].forEach(t => {
       const section = document.getElementById(`tab-${t}`);
-      const bnavBtn = document.getElementById(`bnav-${t}`);
       const tnavBtn = document.getElementById(`tnav-${t}`);
       
       if (t === tab) {
         if (section) section.classList.remove('hidden');
-        if (bnavBtn) {
-          bnavBtn.classList.remove('text-slate-400');
-          bnavBtn.classList.add('text-brand-600');
-          bnavBtn.querySelector('span')?.classList.add('font-bold');
-          bnavBtn.querySelector('span')?.classList.remove('font-medium');
-        }
         if (tnavBtn) {
-          tnavBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white text-brand-700 shadow-2xs flex items-center gap-1';
+          tnavBtn.className = 'py-2 px-2 rounded-lg text-xs font-black transition-all bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1.5';
         }
       } else {
         if (section) section.classList.add('hidden');
-        if (bnavBtn) {
-          bnavBtn.classList.add('text-slate-400');
-          bnavBtn.classList.remove('text-brand-600');
-          bnavBtn.querySelector('span')?.classList.remove('font-bold');
-          bnavBtn.querySelector('span')?.classList.add('font-medium');
-        }
         if (tnavBtn) {
-          tnavBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold transition-all text-slate-600 hover:text-brand-600 flex items-center gap-1';
+          tnavBtn.className = 'py-2 px-2 rounded-lg text-xs font-bold transition-all text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1.5';
         }
       }
     });
@@ -1039,50 +1099,225 @@ const app = {
     const avatar = document.getElementById('header-user-avatar');
     const nameEl = document.getElementById('header-user-name');
     
-    avatar.className = `w-6 h-6 rounded-full ${current.color} text-white flex items-center justify-center text-[10px] font-bold shadow-xs`;
-    avatar.textContent = current.initials;
-    nameEl.textContent = current.name.split(' ')[0];
+    if (avatar) avatar.innerHTML = getMeepleSvg(current.color, 20);
+    if (nameEl) nameEl.textContent = current.name.split(' ')[0];
   },
 
-  openUserSheet() {
-    const friends = db.getFriends();
-    const list = document.getElementById('user-sheet-list');
+  gateMode: 'login',
 
-    list.innerHTML = friends.map(f => {
-      const isSelected = f.id === this.currentUserId;
+  setGateMode(mode) {
+    this.gateMode = mode;
+    const tabLogin = document.getElementById('btn-tab-gate-login');
+    const tabRegister = document.getElementById('btn-tab-gate-register');
+    const panelLogin = document.getElementById('gate-panel-login');
+    const panelRegister = document.getElementById('gate-panel-register');
+
+    if (mode === 'login') {
+      if (tabLogin) tabLogin.className = 'py-2 px-2 rounded-xl text-xs font-black transition-all bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1.5';
+      if (tabRegister) tabRegister.className = 'py-2 px-2 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1.5';
+      if (panelLogin) panelLogin.classList.remove('hidden');
+      if (panelRegister) panelRegister.classList.add('hidden');
+      this.populateGateSelect();
+    } else {
+      if (tabRegister) tabRegister.className = 'py-2 px-2 rounded-xl text-xs font-black transition-all bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1.5';
+      if (tabLogin) tabLogin.className = 'py-2 px-2 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1.5';
+      if (panelRegister) panelRegister.classList.remove('hidden');
+      if (panelLogin) panelLogin.classList.add('hidden');
+      this.renderGateNewMeeplePalette();
+      const input = document.getElementById('gate-new-name');
+      if (input) setTimeout(() => input.focus(), 60);
+    }
+  },
+
+  populateGateSelect() {
+    const friends = db.getFriends();
+    const select = document.getElementById('gate-user-select');
+    if (!select) return;
+
+    if (friends.length === 0) {
+      select.innerHTML = '<option value="">No hay jugadores registrados</option>';
+      return;
+    }
+
+    select.innerHTML = friends.map(f => `
+      <option value="${f.id}" ${f.id === this.currentUserId ? 'selected' : ''}>
+        ${f.name}
+      </option>
+    `).join('');
+
+    this.handleGateUserSelectChange();
+  },
+
+  handleGateUserSelectChange() {
+    const select = document.getElementById('gate-user-select');
+    if (!select) return;
+
+    const val = select.value;
+    const friends = db.getFriends();
+    const friend = friends.find(f => f.id === val) || friends[0];
+
+    if (friend) {
+      const meepleEl = document.getElementById('gate-preview-meeple');
+      const nameEl = document.getElementById('gate-preview-name');
+      if (meepleEl) meepleEl.innerHTML = getMeepleSvg(friend.color, 24);
+      if (nameEl) nameEl.textContent = friend.name;
+    }
+  },
+
+  selectedMeepleColor: 'bg-red-600',
+
+  setGateNewMeepleColor(colorId) {
+    this.selectedMeepleColor = colorId;
+    const hidden = document.getElementById('gate-selected-meeple-color');
+    if (hidden) hidden.value = colorId;
+    this.renderGateNewMeeplePalette();
+  },
+
+  renderGateNewMeeplePalette() {
+    const friends = db.getFriends();
+    const takenColors = new Set(friends.map(f => f.color));
+    const box = document.getElementById('gate-new-meeple-palette');
+    if (!box) return;
+
+    // Find first available color if current selection is taken
+    const availableColors = MEEPLE_COLORS.filter(mc => !takenColors.has(mc.id));
+    if (!this.selectedMeepleColor || takenColors.has(this.selectedMeepleColor)) {
+      this.selectedMeepleColor = availableColors.length > 0 ? availableColors[0].id : MEEPLE_COLORS[0].id;
+    }
+    const hidden = document.getElementById('gate-selected-meeple-color');
+    if (hidden) hidden.value = this.selectedMeepleColor;
+
+    box.innerHTML = MEEPLE_COLORS.map(mc => {
+      const isTaken = takenColors.has(mc.id);
+      const isSel = mc.id === this.selectedMeepleColor && !isTaken;
+
+      if (isTaken) {
+        const takenFriend = friends.find(f => f.color === mc.id);
+        const ownerName = takenFriend ? takenFriend.name.split(' ')[0] : 'Ocupado';
+        return `
+          <div class="p-1.5 rounded-xl bg-slate-100/70 border border-slate-200/50 opacity-35 flex flex-col items-center gap-0.5 cursor-not-allowed select-none" title="Color ya elegido por ${ownerName}">
+            ${getMeepleSvg(mc.id, 20)}
+            <span class="text-[8px] font-bold text-slate-500 truncate max-w-[50px]">${ownerName}</span>
+          </div>
+        `;
+      }
+
       return `
-        <div class="w-full flex items-center justify-between p-2.5 rounded-2xl transition-all ${isSelected ? 'bg-brand-50 border-2 border-brand-500' : 'bg-slate-50 border border-slate-200'}">
-          <div onclick="app.selectUser('${f.id}')" class="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
-            <div class="w-9 h-9 rounded-full ${f.color} text-white flex items-center justify-center text-xs font-bold shrink-0">
-              ${f.initials}
-            </div>
-            <span class="font-bold text-xs text-slate-800 truncate">${f.name}</span>
-          </div>
-          <div class="flex items-center gap-1.5 shrink-0 pl-2">
-            <button onclick="event.stopPropagation(); app.closeUserSheet(); app.openEditFriendModal('${f.id}')" title="Modificar nombre o color" class="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-brand-600 active:bg-slate-100 flex items-center justify-center text-[11px] shadow-2xs">
-              <i class="fa-solid fa-pen"></i>
-            </button>
-            <div onclick="app.selectUser('${f.id}')" class="cursor-pointer pl-1 text-base">
-              ${isSelected ? '<i class="fa-solid fa-circle-check text-brand-600"></i>' : '<i class="fa-regular fa-circle text-slate-300"></i>'}
-            </div>
-          </div>
-        </div>
+        <button type="button" onclick="app.setGateNewMeepleColor('${mc.id}')" class="p-1.5 rounded-xl transition-all flex flex-col items-center gap-0.5 bg-white border ${isSel ? 'border-brand-500 ring-2 ring-brand-400 shadow-xs scale-105 bg-brand-50/40' : 'border-slate-200 hover:border-brand-300 active:scale-95'}">
+          ${getMeepleSvg(mc.id, 22)}
+          <span class="text-[8px] font-bold text-slate-700">${mc.name}</span>
+        </button>
       `;
     }).join('');
-
-    document.getElementById('sheet-user').classList.remove('hidden');
   },
 
-  closeUserSheet() {
-    document.getElementById('sheet-user').classList.add('hidden');
+  submitGateLogin() {
+    const select = document.getElementById('gate-user-select');
+    if (!select) return;
+    const val = select.value;
+    if (!val) {
+      alert('Por favor selecciona un perfil para ingresar.');
+      return;
+    }
+
+    this.selectUser(val);
+  },
+
+  submitGateRegister() {
+    const nameInput = document.getElementById('gate-new-name');
+    const name = nameInput ? nameInput.value.trim() : '';
+
+    if (!name) {
+      alert('Por favor escribe tu nombre o apodo para registrarte.');
+      if (nameInput) nameInput.focus();
+      return;
+    }
+
+    const friends = db.getFriends();
+    const takenColors = new Set(friends.map(f => f.color));
+    const hiddenColor = document.getElementById('gate-selected-meeple-color');
+    const color = hiddenColor?.value || this.selectedMeepleColor || 'bg-red-600';
+
+    if (takenColors.has(color)) {
+      alert('Ese color de Meeple ya lo tiene otro amigo del club. Elige uno disponible.');
+      return;
+    }
+
+    const parts = name.split(' ').filter(Boolean);
+    const initials = parts.length > 1 
+      ? (parts[0][0] + parts[1][0]).toUpperCase()
+      : name.substring(0, 2).toUpperCase();
+
+    const newFriend = {
+      id: 'u_' + Date.now(),
+      name,
+      color,
+      initials
+    };
+
+    friends.push(newFriend);
+    db.saveFriends(friends);
+
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
+
+    this.selectUser(newFriend.id);
   },
 
   selectUser(userId) {
     this.currentUserId = userId;
     db.setCurrentUserId(userId);
+    sessionStorage.setItem('bg_user_entered', 'true');
+    localStorage.setItem('bg_user_chosen', 'true');
+    document.documentElement.classList.add('user-entered');
+
+    this.closeUserGate();
     this.updateUserHeader();
-    this.closeUserSheet();
-    if (this.currentTab === 'sessions') this.renderSessions();
+    this.populateModalSelects();
+    this.renderFriends();
+    this.renderGames();
+    this.renderSessions();
+  },
+
+  openUserGate(canCancel = false) {
+    const gate = document.getElementById('gate-screen');
+    if (!gate) return;
+
+    document.documentElement.classList.remove('user-entered');
+    gate.classList.remove('hidden');
+
+    this.setGateMode('login');
+
+    const cancelCont = document.getElementById('gate-close-container');
+    const currName = document.getElementById('gate-current-username');
+    if (cancelCont) {
+      if (canCancel) {
+        cancelCont.classList.remove('hidden');
+        const friends = db.getFriends();
+        const curFriend = friends.find(f => f.id === this.currentUserId);
+        if (currName && curFriend) currName.textContent = curFriend.name;
+      } else {
+        cancelCont.classList.add('hidden');
+      }
+    }
+
+    const nameInput = document.getElementById('gate-new-name');
+    if (nameInput) nameInput.value = '';
+  },
+
+  closeUserGate() {
+    const gate = document.getElementById('gate-screen');
+    if (gate) gate.classList.add('hidden');
+    document.documentElement.classList.add('user-entered');
+  },
+
+  openUserSheet(canCancel) {
+    this.openUserGate(canCancel);
+  },
+
+  closeUserSheet() {
+    this.closeUserGate();
   },
 
   populateModalSelects() {
@@ -1318,6 +1553,9 @@ const app = {
 
     const updated = games.filter(g => g.id !== gameId);
     db.saveGames(updated);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
 
     this.closeModal('modal-game-detail');
     this.populateModalSelects();
@@ -1828,13 +2066,16 @@ const app = {
       const isFull = spotsLeft <= 0;
       const myRsvp = session.attendees.find(a => a.friendId === this.currentUserId)?.status || 'none';
 
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isPast = session.date < todayStr;
+
       // Date formatted for phone
       const dateParts = session.date.split('-');
       const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
       const dateText = dateObj.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
 
       return `
-        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col">
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col ${isPast ? 'opacity-90' : ''}">
           
           <!-- Card Header Image & Badges -->
           <div class="relative h-36 bg-slate-900 overflow-hidden">
@@ -1847,15 +2088,17 @@ const app = {
                 <i class="fa-solid fa-clock text-amber-300"></i> ~${game.durationMin} min
               </span>
 
-              ${isFull 
-                ? `<span class="bg-rose-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1"><i class="fa-solid fa-lock text-[9px]"></i> Mesa Llena</span>`
-                : `<span class="bg-emerald-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1"><i class="fa-solid fa-chair text-[9px]"></i> ${spotsLeft} cupo${spotsLeft > 1 ? 's' : ''} libre${spotsLeft > 1 ? 's' : ''}</span>`
+              ${isPast 
+                ? `<span class="bg-slate-800/90 text-slate-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-slate-600"><i class="fa-solid fa-flag-checkered text-emerald-400"></i> Partida Jugada</span>`
+                : isFull 
+                  ? `<span class="bg-rose-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1"><i class="fa-solid fa-lock text-[9px]"></i> Mesa Llena</span>`
+                  : `<span class="bg-emerald-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1"><i class="fa-solid fa-chair text-[9px]"></i> ${spotsLeft} cupo${spotsLeft > 1 ? 's' : ''} libre${spotsLeft > 1 ? 's' : ''}</span>`
               }
             </div>
 
             <!-- Bottom title over image -->
             <div class="absolute bottom-2.5 left-3.5 right-3.5 text-white">
-              <div class="text-[11px] font-bold text-brand-300 uppercase tracking-wide">${dateText} • ${session.time} hrs</div>
+              <div class="text-[11px] font-bold text-brand-300 uppercase tracking-wide">${dateText} • ${session.time} hrs ${isPast ? '(Pasada)' : ''}</div>
               <h3 class="text-lg font-black leading-tight drop-shadow-sm">${game.title}</h3>
             </div>
           </div>
@@ -1880,24 +2123,24 @@ const app = {
                 ${maybe.length > 0 ? `<span class="text-amber-600 text-[10px] font-semibold">+${maybe.length} en duda</span>` : ''}
               </div>
 
-              <!-- Participant pills -->
+              <!-- Participant pills with Meeples -->
               <div class="flex flex-wrap gap-1.5 pt-0.5">
                 ${confirmed.map(att => {
-                  const f = friends.find(fr => fr.id === att.friendId) || { name: 'Amigo' };
+                  const f = friends.find(fr => fr.id === att.friendId) || { name: 'Amigo', color: 'bg-slate-500' };
                   return `
-                    <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full text-[11px] font-semibold">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      ${f.name.split(' ')[0]}
+                    <span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded-full text-[11px] font-bold">
+                      ${getMeepleSvg(f.color, 14)}
+                      <span>${f.name.split(' ')[0]}</span>
                     </span>
                   `;
                 }).join('')}
 
                 ${maybe.map(att => {
-                  const f = friends.find(fr => fr.id === att.friendId) || { name: 'Amigo' };
+                  const f = friends.find(fr => fr.id === att.friendId) || { name: 'Amigo', color: 'bg-slate-500' };
                   return `
-                    <span class="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full text-[11px] font-semibold">
-                      <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                      ${f.name.split(' ')[0]} (?)
+                    <span class="inline-flex items-center gap-1.5 bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                      ${getMeepleSvg(f.color, 14)}
+                      <span>${f.name.split(' ')[0]} (?)</span>
                     </span>
                   `;
                 }).join('')}
@@ -1911,7 +2154,7 @@ const app = {
             </div>
           </div>
 
-          <!-- Mobile Action Footer: RSVP + WhatsApp Share -->
+          <!-- Mobile Action Footer: RSVP + WhatsApp Share + Delete -->
           <div class="bg-slate-50/90 border-t border-slate-200/70 p-3 flex flex-col gap-2">
             
             <!-- Quick RSVP (Thumb-Friendly Buttons) -->
@@ -1929,16 +2172,44 @@ const app = {
               </button>
             </div>
 
-            <!-- WhatsApp Share Button -->
-            <button onclick="app.shareToWhatsapp('${session.id}')" class="w-full py-1.5 rounded-xl text-[11px] font-bold text-emerald-700 bg-emerald-100/70 active:bg-emerald-200 flex items-center justify-center gap-1.5 transition-colors">
-              <i class="fa-brands fa-whatsapp text-sm"></i>
-              <span>Compartir en el grupo de WhatsApp</span>
-            </button>
+            <!-- Share & Delete Actions Row -->
+            <div class="flex items-center gap-2 pt-0.5">
+              <button onclick="app.shareToWhatsapp('${session.id}')" class="flex-1 py-2 rounded-xl text-[11px] font-bold text-emerald-700 bg-emerald-100/70 active:bg-emerald-200 flex items-center justify-center gap-1.5 transition-colors">
+                <i class="fa-brands fa-whatsapp text-sm"></i>
+                <span>Compartir en WhatsApp</span>
+              </button>
+
+              <button onclick="app.deleteSession('${session.id}')" class="px-3 py-2 rounded-xl text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200/80 flex items-center justify-center gap-1 transition-colors" title="Eliminar o cancelar esta partida">
+                <i class="fa-solid fa-trash-can text-[10px]"></i>
+                <span>Eliminar</span>
+              </button>
+            </div>
 
           </div>
         </div>
       `;
     }).join('');
+  },
+
+  deleteSession(sessionId) {
+    const sessions = db.getSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const games = db.getGames();
+    const game = games.find(g => g.id === session.gameId);
+    const gameTitle = game ? game.title : 'esta partida';
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar la partida de "${gameTitle}"?`)) {
+      return;
+    }
+
+    const updated = sessions.filter(s => s.id !== sessionId);
+    db.saveSessions(updated);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
+    this.renderSessions();
   },
 
   setRsvp(sessionId, status) {
@@ -2218,8 +2489,8 @@ const app = {
       return `
         <div class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs flex items-center justify-between gap-3">
           <div class="flex items-center gap-3 min-w-0 flex-1">
-            <div class="w-10 h-10 rounded-full ${f.color || 'bg-violet-600'} text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
-              ${f.initials || f.name.substring(0, 2).toUpperCase()}
+            <div class="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-200 shadow-2xs flex items-center justify-center shrink-0">
+              ${getMeepleSvg(f.color, 24)}
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5">
@@ -2323,6 +2594,9 @@ const app = {
     }
 
     db.saveFriends(friends);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
     this.closeModal('modal-friend');
     const form = document.getElementById('form-new-friend');
     if (form) form.reset();
@@ -2355,6 +2629,9 @@ const app = {
     }
 
     db.saveFriends(updatedFriends);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
 
     this.populateModalSelects();
     this.updateUserHeader();
