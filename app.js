@@ -759,10 +759,13 @@ const DEFAULT_SESSIONS = [
   }
 ];
 
+// URL de Google Apps Script compartida por defecto para todo el club (opcional)
+const CLUB_DEFAULT_GSHEET_URL = 'https://script.google.com/macros/s/AKfycbxJmP5-FBNZ66z7fU3-sGaFwLS0Fg36K4OS4tzFKm2BLPqe-NaymzkJ5NQXYdTaE6jK/exec';
+
 // Decoupled DB Layer (localStorage + Google Sheets Cloud Sync)
 const db = {
   getGSheetUrl() {
-    return localStorage.getItem('bg_gsheet_url') || '';
+    return localStorage.getItem('bg_gsheet_url') || CLUB_DEFAULT_GSHEET_URL || '';
   },
   setGSheetUrl(url) {
     if (url) localStorage.setItem('bg_gsheet_url', url.trim());
@@ -781,6 +784,9 @@ const db = {
     const games = raw ? JSON.parse(raw) : DEFAULT_GAMES;
     return games.map(g => ({
       ...g,
+      minPlayers: parseInt(g.minPlayers) || 2,
+      maxPlayers: parseInt(g.maxPlayers) || 4,
+      durationMin: parseInt(g.durationMin) || 60,
       image: getSafeImageUrl(g.image)
     }));
   },
@@ -790,7 +796,19 @@ const db = {
   },
   getSessions() {
     const raw = localStorage.getItem('bg_sessions');
-    return raw ? JSON.parse(raw) : DEFAULT_SESSIONS;
+    const sessions = raw ? JSON.parse(raw) : DEFAULT_SESSIONS;
+    return sessions.map(s => {
+      let att = s.attendees;
+      if (typeof att === 'string') {
+        try { att = JSON.parse(att); } catch (e) { att = []; }
+      }
+      if (!Array.isArray(att)) att = [];
+      return {
+        ...s,
+        date: (s.date || '').split('T')[0],
+        attendees: att
+      };
+    });
   },
   saveSessions(s) {
     localStorage.setItem('bg_sessions', JSON.stringify(s));
@@ -808,27 +826,63 @@ const db = {
     if (!url) return false;
 
     try {
-      const fetchUrl = url + (url.includes('?') ? '&' : '?') + 'action=all';
+      // Timestamp anti-cache para evitar que el navegador móvil guarde respuestas viejas
+      const fetchUrl = url + (url.includes('?') ? '&' : '?') + 'action=all&_t=' + Date.now();
       const res = await fetch(fetchUrl);
+      if (!res.ok) return false;
       const data = await res.json();
 
       let changed = false;
-      if (data.games && Array.isArray(data.games) && data.games.length) {
+
+      // 1. Sincronizar Juegos
+      if (data && Array.isArray(data.games)) {
         const sanitized = data.games.map(g => ({
           ...g,
+          minPlayers: parseInt(g.minPlayers) || 2,
+          maxPlayers: parseInt(g.maxPlayers) || 4,
+          durationMin: parseInt(g.durationMin) || 60,
           image: getSafeImageUrl(g.image)
         }));
-        localStorage.setItem('bg_games', JSON.stringify(sanitized));
-        changed = true;
+        const currentGames = localStorage.getItem('bg_games') || '';
+        const newGames = JSON.stringify(sanitized);
+        if (currentGames !== newGames) {
+          localStorage.setItem('bg_games', newGames);
+          changed = true;
+        }
       }
-      if (data.sessions && Array.isArray(data.sessions) && data.sessions.length) {
-        localStorage.setItem('bg_sessions', JSON.stringify(data.sessions));
-        changed = true;
+
+      // 2. Sincronizar Sesiones (incluso si la lista quedó vacía tras eliminar una partida)
+      if (data && Array.isArray(data.sessions)) {
+        const sanitizedSessions = data.sessions.map(s => {
+          let att = s.attendees;
+          if (typeof att === 'string') {
+            try { att = JSON.parse(att); } catch (e) { att = []; }
+          }
+          if (!Array.isArray(att)) att = [];
+          return {
+            ...s,
+            date: (s.date || '').split('T')[0],
+            attendees: att
+          };
+        });
+        const currentSessions = localStorage.getItem('bg_sessions') || '';
+        const newSessions = JSON.stringify(sanitizedSessions);
+        if (currentSessions !== newSessions) {
+          localStorage.setItem('bg_sessions', newSessions);
+          changed = true;
+        }
       }
-      if (data.friends && Array.isArray(data.friends) && data.friends.length) {
-        localStorage.setItem('bg_friends', JSON.stringify(data.friends));
-        changed = true;
+
+      // 3. Sincronizar Amigos
+      if (data && Array.isArray(data.friends) && data.friends.length > 0) {
+        const currentFriends = localStorage.getItem('bg_friends') || '';
+        const newFriends = JSON.stringify(data.friends);
+        if (currentFriends !== newFriends) {
+          localStorage.setItem('bg_friends', newFriends);
+          changed = true;
+        }
       }
+
       return changed;
     } catch (err) {
       console.warn('Sync with Google Sheets failed:', err);
@@ -836,23 +890,68 @@ const db = {
     }
   },
 
-  async pushToGoogleSheets() {
+  _pushTimeout: null,
+  _isPushing: false,
+  _pendingPush: false,
+
+  pushToGoogleSheets() {
     const url = this.getGSheetUrl();
     if (!url) return;
 
+    if (this._pushTimeout) clearTimeout(this._pushTimeout);
+    this._pushTimeout = setTimeout(() => {
+      this._executePush();
+    }, 250);
+  },
+
+  async _executePush() {
+    const url = this.getGSheetUrl();
+    if (!url) return;
+
+    if (this._isPushing) {
+      this._pendingPush = true;
+      return;
+    }
+
+    this._isPushing = true;
+    this._pendingPush = false;
+
+    // Indicador visual en la barra superior de guardado en la nube
+    const icon = document.getElementById('db-status-icon');
+    if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-emerald-500 text-xs';
+
+    const payload = JSON.stringify({
+      action: 'save_all',
+      games: this.getGames(),
+      sessions: this.getSessions(),
+      friends: this.getFriends()
+    });
+
     try {
+      // mode: 'no-cors' permite que el navegador envíe el POST a Apps Script sin ser bloqueado por la redirección 302
       await fetch(url, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'save_all',
-          games: this.getGames(),
-          sessions: this.getSessions(),
-          friends: this.getFriends()
-        })
+        body: payload
       });
     } catch (err) {
-      console.warn('Push to Google Sheets failed:', err);
+      console.warn('Push to Google Sheets error, trying sendBeacon:', err);
+      try {
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(url, payload);
+        }
+      } catch (beaconErr) {}
+    } finally {
+      this._isPushing = false;
+      if (icon) {
+        setTimeout(() => {
+          icon.className = 'fa-solid fa-cloud text-emerald-500 text-xs';
+        }, 600);
+      }
+      if (this._pendingPush) {
+        this.pushToGoogleSheets();
+      }
     }
   }
 };
@@ -864,27 +963,39 @@ const app = {
   activePlayerFilter: '',
 
   async init() {
-    // Auto-detect ?db=... in URL for seamless zero-setup sharing with friends
+    // 1. Auto-detect ?db=... in URL for seamless zero-setup sharing with friends
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const dbParam = urlParams.get('db');
       if (dbParam && dbParam.startsWith('https://script.google.com/macros/s/')) {
         db.setGSheetUrl(dbParam);
+        try {
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        } catch (e) {}
       }
     } catch (e) {
       console.warn('URL params check failed:', e);
     }
 
-    if (!localStorage.getItem('bg_friends')) db.saveFriends(DEFAULT_FRIENDS);
-    if (!localStorage.getItem('bg_games')) db.saveGames(DEFAULT_GAMES);
-    if (!localStorage.getItem('bg_sessions')) db.saveSessions(DEFAULT_SESSIONS);
+    // 2. Si hay conexión a la nube configurada, sincronizar PRIMERO desde Google Sheets
+    if (db.getGSheetUrl()) {
+      try {
+        await db.syncWithGoogleSheets();
+      } catch (e) {
+        console.warn('Initial cloud sync error:', e);
+      }
+    }
 
-    // Update initial test user from Carlos to Elvis if present
-    const existingFriends = db.getFriends();
-    if (existingFriends && existingFriends.length > 0 && existingFriends[0].name.includes('Carlos')) {
-      existingFriends[0].name = 'Elvis';
-      existingFriends[0].color = 'bg-red-600';
-      db.saveFriends(existingFriends);
+    // 3. Inicializar valores locales por defecto SOLO si localStorage sigue vacío y SIN enviar a la nube
+    if (!localStorage.getItem('bg_friends')) {
+      localStorage.setItem('bg_friends', JSON.stringify(DEFAULT_FRIENDS));
+    }
+    if (!localStorage.getItem('bg_games')) {
+      localStorage.setItem('bg_games', JSON.stringify(DEFAULT_GAMES));
+    }
+    if (!localStorage.getItem('bg_sessions')) {
+      localStorage.setItem('bg_sessions', JSON.stringify(DEFAULT_SESSIONS));
     }
 
     this.currentUserId = db.getCurrentUserId();
@@ -904,7 +1015,7 @@ const app = {
       this.closeUserGate();
     }
 
-    // Sync with Google Sheets in the background without blocking the UI
+    // Secondary background sync to refresh any new updates
     if (db.getGSheetUrl()) {
       db.syncWithGoogleSheets().then(changed => {
         if (changed) {
@@ -930,7 +1041,7 @@ const app = {
   autoSyncInterval: null,
   startAutoSync() {
     if (this.autoSyncInterval) clearInterval(this.autoSyncInterval);
-    // Auto-poll cloud database every 20 seconds to keep all phones in sync in real time
+    // Auto-poll cloud database every 5 seconds to keep all phones in sync in real time
     this.autoSyncInterval = setInterval(async () => {
       if (db.getGSheetUrl()) {
         const changed = await db.syncWithGoogleSheets();
@@ -942,7 +1053,16 @@ const app = {
           this.updateUserHeader();
         }
       }
-    }, 20000);
+    }, 5000);
+  },
+
+  getShareUrl() {
+    let base = window.location.href.split('?')[0].split('#')[0];
+    const url = db.getGSheetUrl();
+    if (url && url !== CLUB_DEFAULT_GSHEET_URL) {
+      return `${base}?db=${encodeURIComponent(url)}`;
+    }
+    return base;
   },
 
   updateDbStatusUi() {
@@ -994,8 +1114,7 @@ const app = {
       return;
     }
 
-    let base = window.location.href.split('?')[0].split('#')[0];
-    const shareUrl = `${base}?db=${encodeURIComponent(url)}`;
+    const shareUrl = this.getShareUrl();
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(shareUrl).then(() => {
@@ -1744,9 +1863,6 @@ const app = {
 
     const updated = games.filter(g => g.id !== gameId);
     db.saveGames(updated);
-    if (db.getGSheetUrl()) {
-      db.pushToGoogleSheets();
-    }
 
     this.closeModal('modal-game-detail');
     this.populateModalSelects();
@@ -2277,19 +2393,28 @@ const app = {
         image: 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?auto=format&fit=crop&w=600&q=80'
       };
 
-      const confirmed = session.attendees.filter(a => a.status === 'yes');
-      const maybe = session.attendees.filter(a => a.status === 'maybe');
-      const spotsLeft = game.maxPlayers - confirmed.length;
+      const attendees = Array.isArray(session.attendees) ? session.attendees : [];
+      const confirmed = attendees.filter(a => a.status === 'yes');
+      const maybe = attendees.filter(a => a.status === 'maybe');
+      const spotsLeft = (game.maxPlayers || 4) - confirmed.length;
       const isFull = spotsLeft <= 0;
-      const myRsvp = session.attendees.find(a => a.friendId === this.currentUserId)?.status || 'none';
+      const myRsvp = attendees.find(a => a.friendId === this.currentUserId)?.status || 'none';
 
       const todayStr = new Date().toISOString().split('T')[0];
-      const isPast = session.date < todayStr;
+      const sessionDateStr = (session.date || '').split('T')[0];
+      const isPast = sessionDateStr < todayStr;
 
-      // Date formatted for phone
-      const dateParts = session.date.split('-');
-      const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-      const dateText = dateObj.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+      // Date & time formatted safely for phone
+      const dateParts = sessionDateStr.split('-');
+      const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : new Date();
+      const dateText = !isNaN(dateObj.getTime()) 
+        ? dateObj.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+        : sessionDateStr;
+
+      let cleanTime = session.time || '19:30';
+      if (cleanTime.includes('T')) {
+        cleanTime = (cleanTime.split('T')[1] || '').substring(0, 5) || '19:30';
+      }
 
       return `
         <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col ${isPast ? 'opacity-90' : ''}">
@@ -2315,7 +2440,7 @@ const app = {
 
             <!-- Bottom title over image -->
             <div class="absolute bottom-2.5 left-3.5 right-3.5 text-white">
-              <div class="text-[11px] font-bold text-brand-300 uppercase tracking-wide">${dateText} • ${session.time} hrs ${isPast ? '(Pasada)' : ''}</div>
+              <div class="text-[11px] font-bold text-brand-300 uppercase tracking-wide">${dateText} • ${cleanTime} hrs ${isPast ? '(Pasada)' : ''}</div>
               <h3 class="text-lg font-black leading-tight drop-shadow-sm">${game.title}</h3>
             </div>
           </div>
@@ -2423,9 +2548,6 @@ const app = {
 
     const updated = sessions.filter(s => s.id !== sessionId);
     db.saveSessions(updated);
-    if (db.getGSheetUrl()) {
-      db.pushToGoogleSheets();
-    }
     this.renderSessions();
   },
 
@@ -2437,14 +2559,15 @@ const app = {
     if (!session) return;
 
     const game = db.getGames().find(g => g.id === session.gameId);
-    const confirmedCount = session.attendees.filter(a => a.status === 'yes' && a.friendId !== this.currentUserId).length;
+    const attendees = Array.isArray(session.attendees) ? session.attendees : [];
+    const confirmedCount = attendees.filter(a => a.status === 'yes' && a.friendId !== this.currentUserId).length;
 
     if (status === 'yes' && game && confirmedCount >= game.maxPlayers) {
       alert(`¡Mesa llena! ${game.title} solo admite ${game.maxPlayers} jugadores. Puedes marcarte como 'Quizás' por si alguien cancela.`);
       return;
     }
 
-    session.attendees = session.attendees.filter(a => a.friendId !== this.currentUserId);
+    session.attendees = attendees.filter(a => a.friendId !== this.currentUserId);
     if (status !== 'no') {
       session.attendees.push({ friendId: this.currentUserId, status });
     }
@@ -2457,8 +2580,10 @@ const app = {
     const session = db.getSessions().find(s => s.id === sessionId);
     if (!session) return;
     const game = db.getGames().find(g => g.id === session.gameId);
-    const confirmed = session.attendees.filter(a => a.status === 'yes');
+    const attendees = Array.isArray(session.attendees) ? session.attendees : [];
+    const confirmed = attendees.filter(a => a.status === 'yes');
     const spotsLeft = (game?.maxPlayers || 4) - confirmed.length;
+    const shareUrl = this.getShareUrl();
 
     const msg = `🎲 *¡Noche de Juegos armada!* 🎲%0A%0A` +
       `🕹️ *Juego:* ${game?.title || 'Juego de mesa'}%0A` +
@@ -2466,7 +2591,7 @@ const app = {
       `📍 *Lugar:* ${session.location}%0A` +
       `👥 *Confirmados (${confirmed.length}/${game?.maxPlayers || 4}):* ${spotsLeft > 0 ? `(¡Quedan ${spotsLeft} cupos!)` : '(¡Mesa llena!)'}%0A` +
       (session.notes ? `📝 *Nota:* ${session.notes}%0A%0A` : '%0A') +
-      `👉 ¡Confirmen su asistencia en la app para reservar su lugar!`;
+      `📲 *Confirma tu asistencia entrando aquí:*%0A${encodeURIComponent(shareUrl)}`;
 
     window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
   },
@@ -2671,9 +2796,6 @@ const app = {
     }
 
     db.saveGames(games);
-    if (db.getGSheetUrl()) {
-      db.pushToGoogleSheets();
-    }
 
     this.closeModal('modal-game');
     document.getElementById('form-new-game').reset();
@@ -2835,9 +2957,6 @@ const app = {
     }
 
     db.saveFriends(friends);
-    if (db.getGSheetUrl()) {
-      db.pushToGoogleSheets();
-    }
     this.closeModal('modal-friend');
     const form = document.getElementById('form-new-friend');
     if (form) form.reset();
@@ -2870,9 +2989,6 @@ const app = {
     }
 
     db.saveFriends(updatedFriends);
-    if (db.getGSheetUrl()) {
-      db.pushToGoogleSheets();
-    }
 
     this.populateModalSelects();
     this.updateUserHeader();

@@ -112,41 +112,51 @@ function doGet(e) {
   return jsonResponse(getSheetData(ss, sheetName));
 }
 
-// API POST: Escritura y guardado de datos
+// API POST: Escritura y guardado de datos con bloqueo atómico para evitar conflictos
 function doPost(e) {
+  const lock = LockService.getScriptLock();
+  const hasLock = lock.tryLock(10000); // Espera hasta 10 seg si dos amigos guardan al mismo tiempo
+
   try {
     const contents = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const action = contents.action;
 
     if (action === 'save_all') {
-      if (contents.games) setSheetData(ss, 'Juegos', contents.games);
-      if (contents.sessions) setSheetData(ss, 'Sesiones', contents.sessions);
-      if (contents.friends) setSheetData(ss, 'Amigos', contents.friends);
+      if (contents.games !== undefined) setSheetData(ss, 'Juegos', contents.games);
+      if (contents.sessions !== undefined) setSheetData(ss, 'Sesiones', contents.sessions);
+      if (contents.friends !== undefined) setSheetData(ss, 'Amigos', contents.friends);
       return jsonResponse({ success: true, message: 'Guardado correctamente en Google Sheets' });
     }
 
     return jsonResponse({ error: 'Acción no válida' });
   } catch (err) {
     return jsonResponse({ error: err.toString() });
+  } finally {
+    if (hasLock) {
+      try { lock.releaseLock(); } catch (e) {}
+    }
   }
 }
 
 function getSheetData(ss, sheetName) {
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow <= 1 || lastCol < 1) return [];
 
-  const headers = data[0];
-  const rows = data.slice(1);
+  // getDisplayValues() obtiene las celdas como texto exacto, evitando que Google altere fechas (2026-11-28) u horas (19:30)
+  const displayData = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+  const headers = displayData[0];
+  const rows = displayData.slice(1);
 
   return rows.map(row => {
     const obj = {};
     headers.forEach((h, idx) => {
       let val = row[idx];
-      if (h === 'attendees' && typeof val === 'string' && val.startsWith('[')) {
-        try { val = JSON.parse(val); } catch (e) {}
+      if (h === 'attendees' && typeof val === 'string' && val.trim().startsWith('[')) {
+        try { val = JSON.parse(val); } catch (e) { val = []; }
       }
       obj[h] = val;
     });
@@ -156,26 +166,36 @@ function getSheetData(ss, sheetName) {
 
 function setSheetData(ss, sheetName, items) {
   const sheet = ss.getSheetByName(sheetName);
-  if (!sheet || !items || !items.length) return;
+  if (!sheet) return;
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  if (!headers.length) return;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (!headers || !headers.length) return;
 
-  if (sheet.getLastRow() > 1) {
-    sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+  // 1. Limpiar siempre las filas anteriores (manteniendo la fila 1 de encabezados)
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
   }
 
+  // 2. Si la lista quedó vacía (ej. se eliminó la partida o el juego), terminamos aquí
+  if (!items || !items.length) return;
+
+  // 3. Escribir las filas actualizadas asegurando formato de texto para que Google no modifique fechas
   const rows = items.map(item => {
     return headers.map(h => {
       let val = item[h] !== undefined ? item[h] : '';
-      if (typeof val === 'object') {
+      if (typeof val === 'object' && val !== null) {
         val = JSON.stringify(val);
       }
-      return val;
+      return String(val);
     });
   });
 
-  sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  const range = sheet.getRange(2, 1, rows.length, headers.length);
+  range.setNumberFormat('@'); // Forzar texto plano
+  range.setValues(rows);
 }
 
 function jsonResponse(data) {
