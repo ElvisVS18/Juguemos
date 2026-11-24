@@ -764,6 +764,7 @@ const CLUB_DEFAULT_GSHEET_URL = 'https://script.google.com/macros/s/AKfycbxJmP5-
 
 // Decoupled DB Layer (Siempre conectado a Google Sheets en la nube)
 const db = {
+  isCloudOnline: false,
   getGSheetUrl() {
     return CLUB_DEFAULT_GSHEET_URL;
   },
@@ -919,7 +920,14 @@ const db = {
         }
       }
 
-      if (!data) return false;
+      if (!data || !data.games) {
+        this.isCloudOnline = false;
+        if (window.app && app.updateDbStatusUi) app.updateDbStatusUi();
+        return false;
+      }
+
+      this.isCloudOnline = true;
+      if (window.app && app.updateDbStatusUi) app.updateDbStatusUi();
 
       let changed = false;
 
@@ -1021,11 +1029,11 @@ const db = {
 
   async _executePush() {
     const url = this.getGSheetUrl();
-    if (!url) return;
+    if (!url) return { success: false, error: 'No URL' };
 
     if (this._isPushing) {
       this._pendingPush = true;
-      return;
+      return { success: false, error: 'Push in progress' };
     }
 
     this._isPushing = true;
@@ -1042,6 +1050,7 @@ const db = {
       friends: this.getFriends()
     };
     const payloadStr = JSON.stringify(payloadObj);
+    let pushConfirmed = false;
 
     try {
       // Canal 1: POST vía fetch
@@ -1058,10 +1067,14 @@ const db = {
       // Canal 3: JSONP GET save_all para asegurar guardado y confirmación en tiempo real
       if (encodeURIComponent(payloadStr).length < 6000) {
         try {
-          await this.fetchJsonp(url, {
+          const res = await this.fetchJsonp(url, {
             action: 'save_all',
             data: payloadStr
           });
+          if (res && (res.success || res.games)) {
+            pushConfirmed = true;
+            this.isCloudOnline = true;
+          }
         } catch (e) {
           console.warn('JSONP push warning:', e);
         }
@@ -1070,15 +1083,15 @@ const db = {
       console.warn('Push error:', err);
     } finally {
       this._isPushing = false;
-      if (icon) {
-        setTimeout(() => {
-          icon.className = 'fa-solid fa-cloud text-emerald-500 text-xs';
-        }, 600);
+      if (window.app && app.updateDbStatusUi) {
+        app.updateDbStatusUi();
       }
       if (this._pendingPush) {
         this.pushToGoogleSheets();
       }
     }
+
+    return { success: pushConfirmed };
   }
 };
 
@@ -1208,8 +1221,49 @@ const app = {
   updateDbStatusUi() {
     const icon = document.getElementById('db-status-icon');
     const label = document.getElementById('db-status-label');
-    if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
-    if (label) label.textContent = 'En la Nube';
+    const statusCard = document.getElementById('db-modal-status-card');
+
+    if (db.isCloudOnline) {
+      if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
+      if (label) label.textContent = 'En la Nube';
+      if (statusCard) {
+        statusCard.className = 'p-3.5 rounded-2xl border bg-emerald-50 border-emerald-200 text-emerald-950 flex items-center gap-3';
+        statusCard.innerHTML = `
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shrink-0 shadow-xs">
+            <i class="fa-solid fa-cloud-check"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span class="font-black text-emerald-900 text-xs">Conectado y Sincronizado</span>
+            </div>
+            <p class="text-[11px] text-emerald-700 mt-0.5 leading-snug">
+              Tu hoja de Google Sheets está activa y sincronizando datos en tiempo real.
+            </p>
+          </div>
+        `;
+      }
+    } else {
+      if (icon) icon.className = 'fa-solid fa-triangle-exclamation text-amber-500 text-xs';
+      if (label) label.textContent = 'Sin Conexión';
+      if (statusCard) {
+        statusCard.className = 'p-3.5 rounded-2xl border bg-amber-50 border-amber-200 text-amber-950 flex items-center gap-3';
+        statusCard.innerHTML = `
+          <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center text-lg shrink-0 shadow-xs">
+            <i class="fa-solid fa-cloud-slash"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span class="font-black text-amber-900 text-xs">Google Sheets No Responde</span>
+            </div>
+            <p class="text-[11px] text-amber-800 mt-0.5 leading-snug">
+              Google Apps Script está corriendo la versión antigua o necesita permisos. Revisa la guía de activación.
+            </p>
+          </div>
+        `;
+      }
+    }
   },
 
   copyShareLink() {
@@ -1244,25 +1298,29 @@ const app = {
     try {
       await db.syncWithGoogleSheets();
 
-      this.renderGames();
-      this.renderSessions();
-      this.renderFriends();
-      this.populateModalSelects();
-      this.updateUserHeader();
+      if (db.isCloudOnline) {
+        this.renderGames();
+        this.renderSessions();
+        this.renderFriends();
+        this.populateModalSelects();
+        this.updateUserHeader();
 
-      const gameCount = db.getGames().length;
-      if (icon) icon.className = 'fa-solid fa-check text-emerald-600 text-xs';
-      if (label) label.textContent = 'Al día';
-      if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i><span>¡Descargado: ${gameCount} juegos!</span>`;
+        const gameCount = db.getGames().length;
+        if (icon) icon.className = 'fa-solid fa-check text-emerald-600 text-xs';
+        if (label) label.textContent = 'Al día';
+        if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i><span>¡Descargado: ${gameCount} juegos!</span>`;
+        alert(`¡Sincronización exitosa con Google Sheets!\n\nSe descargaron los datos actualizados de la nube (${gameCount} juegos en ludoteca).`);
+      } else {
+        if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-600"></i><span>Sin respuesta de Google Sheets</span>`;
+        alert(`⚠️ Google Apps Script no respondió.\n\nEsto sucede porque Google Apps Script aún no tiene implementada la "Nueva versión" en su menú de implementación.`);
+      }
 
       setTimeout(() => {
-        if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
-        if (label) label.textContent = 'En la Nube';
+        this.updateDbStatusUi();
         if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-arrow-down"></i><span>Descargar datos desde la Nube</span>`;
-      }, 2000);
+      }, 2500);
     } catch (e) {
-      if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
-      if (label) label.textContent = 'En la Nube';
+      this.updateDbStatusUi();
       if (btnModal) btnModal.innerHTML = `<i class="fa-solid fa-arrow-down"></i><span>Descargar datos desde la Nube</span>`;
     }
   },
@@ -1274,16 +1332,22 @@ const app = {
     if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-emerald-600 text-xs';
 
     const localGames = db.getGames();
-    await db._executePush();
+    const result = await db._executePush();
 
-    if (btn) btn.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i><span>¡${localGames.length} juegos subidos con éxito!</span>`;
-    if (icon) icon.className = 'fa-solid fa-check text-emerald-600 text-xs';
-
-    alert(`¡Excelente! Se subieron tus ${localGames.length} juegos a la hoja de Google Sheets.\n\nAhora abre tu celular o dale a "Descargar datos" en cualquier otro dispositivo y aparecerán exactamente los mismos ${localGames.length} juegos.`);
+    if (result && result.success) {
+      if (btn) btn.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i><span>¡${localGames.length} juegos subidos con éxito!</span>`;
+      if (icon) icon.className = 'fa-solid fa-check text-emerald-600 text-xs';
+      db.isCloudOnline = true;
+      this.updateDbStatusUi();
+      alert(`¡Excelente! Se subieron tus ${localGames.length} juegos a la hoja de Google Sheets y fue confirmado.\n\nAhora abre tu celular y verás exactamente los mismos ${localGames.length} juegos.`);
+    } else {
+      if (btn) btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i><span>Sin confirmación de la Nube</span>`;
+      alert(`⚠️ Se intentaron enviar los datos, pero Google Apps Script no respondió con confirmación.\n\nPor favor actualiza a la "Nueva versión" en Google Apps Script.`);
+    }
 
     setTimeout(() => {
       if (btn) btn.innerHTML = `<i class="fa-solid fa-arrow-up-from-bracket"></i><span>Subir datos de este equipo a la Nube</span>`;
-      if (icon) icon.className = 'fa-solid fa-cloud text-emerald-600 text-xs';
+      this.updateDbStatusUi();
     }, 2500);
   },
 
