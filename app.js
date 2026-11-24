@@ -40,6 +40,40 @@ function getMeepleSvg(colorKeyOrHex, size = 22) {
   </svg>`;
 }
 
+// Global Image URL Sanitizer (Direct clean HTTPS URLs without broken third-party proxies)
+function getSafeImageUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  let url = rawUrl.trim();
+  if (!url) return '';
+  if (url.startsWith('data:')) return url; // Base64 user uploaded photo
+
+  // 1. Unwrap any legacy weserv.nl or wsrv.nl URLs
+  if (url.includes('weserv.nl') || url.includes('wsrv.nl')) {
+    const match = url.match(/[?&]url=([^&]+)/i) || url.match(/url=([^&]+)/i);
+    if (match && match[1]) {
+      url = decodeURIComponent(match[1]);
+    }
+  }
+
+  // 2. Unwrap any wp.com proxy URLs
+  if (url.includes('.wp.com/')) {
+    url = url.replace(/^https?:\/\/[a-z0-9]+\.wp\.com\//i, 'https://');
+    url = url.split('?')[0];
+  }
+
+  // 3. Fix double slashes
+  if (url.startsWith('//')) {
+    url = 'https:' + url;
+  }
+
+  // 4. Ensure HTTPS
+  if (url.startsWith('http://')) {
+    url = url.replace('http://', 'https://');
+  }
+
+  return url;
+}
+
 // Default mock data for first load
 const DEFAULT_FRIENDS = [
   { id: 'u1', name: 'Elvis', color: 'bg-red-600', initials: 'EL' },
@@ -647,17 +681,12 @@ const POPULAR_GAMES_CATALOG = [
   }
 ];
 
+// Clean and unwrap all catalog images to direct clean HTTPS URLs
+POPULAR_GAMES_CATALOG.forEach(g => {
+  g.image = getSafeImageUrl(g.image);
+});
+
 const DEFAULT_GAMES = [
-  {
-    id: 'g0',
-    title: 'Brass: Birmingham',
-    minPlayers: 2,
-    maxPlayers: 4,
-    durationMin: 90,
-    ownerId: 'u1',
-    description: 'Aclamada obra maestra de estrategia económica ambientada en la Revolución Industrial de Lancashire y Birmingham, Inglaterra. Los jugadores compiten como magnates construyendo redes de canales y ferrocarriles, fundando industrias de algodón, carbón y hierro, y vendiendo mercancías con una profunda gestión de préstamos y recursos.',
-    image: 'https://images.weserv.nl/?url=https://cf.geekdo-images.com/x3zxjrAET9EgndpBRbeikg__itemrep/img/1a2r1l_qYx-uGvBvd_7n0_qH73w=/fit-in/500x500/filters:strip_icc()/pic3490053.jpg&output=jpg'
-  },
   {
     id: 'g1',
     title: 'Catan',
@@ -666,7 +695,7 @@ const DEFAULT_GAMES = [
     durationMin: 75,
     ownerId: 'u1',
     description: 'Comercia, construye y coloniza la isla de Catán en este clásico mundial de estrategia y negociación.',
-    image: 'https://images.weserv.nl/?url=https://upload.wikimedia.org/wikipedia/en/a/a3/Catan-2015-boxart.jpg&w=500&output=jpg'
+    image: 'https://upload.wikimedia.org/wikipedia/en/a/a3/Catan-2015-boxart.jpg'
   },
   {
     id: 'g2',
@@ -676,7 +705,7 @@ const DEFAULT_GAMES = [
     durationMin: 45,
     ownerId: 'u2',
     description: 'Coloca losetas para construir caminos, ciudades, monasterios y campos puntuando con tus seguidores.',
-    image: 'https://images.weserv.nl/?url=https://upload.wikimedia.org/wikipedia/en/7/76/Carcassonne-game.jpg&w=500&output=jpg'
+    image: 'https://upload.wikimedia.org/wikipedia/en/7/76/Carcassonne-game.jpg'
   },
   {
     id: 'g3',
@@ -686,7 +715,7 @@ const DEFAULT_GAMES = [
     durationMin: 35,
     ownerId: 'u4',
     description: 'Juego de deducción poética con preciosas cartas ilustradas donde adivinas la pista del narrador.',
-    image: 'https://images.weserv.nl/?url=https://upload.wikimedia.org/wikipedia/en/1/1b/Dixit_board_game_box_cover.jpg&w=500&output=jpg'
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Dixit_game_0001.jpg/500px-Dixit_game_0001.jpg'
   },
   {
     id: 'g4',
@@ -696,7 +725,7 @@ const DEFAULT_GAMES = [
     durationMin: 120,
     ownerId: 'u3',
     description: 'Controla corporaciones para hacer habitable Marte subiendo temperatura, oxígeno y océanos.',
-    image: 'https://images.weserv.nl/?url=https://upload.wikimedia.org/wikipedia/en/9/91/Terraforming_Mars_board_game_box.jpg&w=500&output=jpg'
+    image: 'https://upload.wikimedia.org/wikipedia/en/f/f0/Terraforming_Mars_board_game_box_cover.jpg'
   }
 ];
 
@@ -749,7 +778,11 @@ const db = {
   },
   getGames() {
     const raw = localStorage.getItem('bg_games');
-    return raw ? JSON.parse(raw) : DEFAULT_GAMES;
+    const games = raw ? JSON.parse(raw) : DEFAULT_GAMES;
+    return games.map(g => ({
+      ...g,
+      image: getSafeImageUrl(g.image)
+    }));
   },
   saveGames(g) {
     localStorage.setItem('bg_games', JSON.stringify(g));
@@ -781,7 +814,11 @@ const db = {
 
       let changed = false;
       if (data.games && Array.isArray(data.games) && data.games.length) {
-        localStorage.setItem('bg_games', JSON.stringify(data.games));
+        const sanitized = data.games.map(g => ({
+          ...g,
+          image: getSafeImageUrl(g.image)
+        }));
+        localStorage.setItem('bg_games', JSON.stringify(sanitized));
         changed = true;
       }
       if (data.sessions && Array.isArray(data.sessions) && data.sessions.length) {
@@ -854,6 +891,10 @@ const app = {
     this.updateUserHeader();
     this.updateDbStatusUi();
     this.populateModalSelects();
+
+    // Auto-migrate any existing games in localStorage with unblocked official high-res covers & reviews
+    this.migrateExistingGames();
+
     this.setTab('sessions');
 
     // INSTANT GATE: Show login/selection immediately at 0ms if not logged in this session
@@ -862,9 +903,6 @@ const app = {
     } else {
       this.closeUserGate();
     }
-
-    // Auto-migrate any existing games in localStorage with official high-res covers & reviews
-    this.migrateExistingGames();
 
     // Sync with Google Sheets in the background without blocking the UI
     if (db.getGSheetUrl()) {
@@ -1040,19 +1078,41 @@ const app = {
     let updated = false;
 
     games = games.map(g => {
+      // 1. Repair any legacy or broken proxy URLs
+      if (g.image && (g.image.includes('weserv.nl') || g.image.includes('wsrv.nl') || g.image.includes('wp.com'))) {
+        g.image = getSafeImageUrl(g.image);
+        updated = true;
+      }
+
+      // 2. Specific fixes for default games with known working URLs
+      if (g.title === 'Dixit' && (!g.image || g.image.includes('1b/Dixit') || g.image.includes('Dixit_board_game_box_cover'))) {
+        g.image = 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Dixit_game_0001.jpg/500px-Dixit_game_0001.jpg';
+        updated = true;
+      }
+      if (g.title === 'Terraforming Mars' && (!g.image || g.image.includes('9/91/Terraforming_Mars_board_game_box.jpg'))) {
+        g.image = 'https://upload.wikimedia.org/wikipedia/en/f/f0/Terraforming_Mars_board_game_box_cover.jpg';
+        updated = true;
+      }
+
+      // 3. If game doesn't have an image or needs metadata update, match with catalog
       const cleanTitle = (g.title || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
       const match = POPULAR_GAMES_CATALOG.find(cat => 
         cat.names.some(n => cleanTitle.includes(n) || n.includes(cleanTitle))
       );
 
       if (match) {
-        // If image is missing, is an unsplash placeholder or old wikimedia without weserv
-        if (!g.image || g.image.includes('unsplash') || !g.image.includes('images.weserv.nl')) {
-          g.image = match.image;
+        if (!g.image || g.image.includes('unsplash') || g.image.includes('weserv.nl')) {
+          g.image = getSafeImageUrl(match.image);
           updated = true;
         }
         if (!g.description || g.description.length < 30) {
           g.description = match.description;
+          updated = true;
+        }
+      } else if (g.image) {
+        const safe = getSafeImageUrl(g.image);
+        if (safe !== g.image) {
+          g.image = safe;
           updated = true;
         }
       }
@@ -1357,7 +1417,12 @@ const app = {
     const card = document.getElementById('game-extracted-card');
     if (!card) return;
     const imgEl = document.getElementById('game-extracted-img');
-    if (imgEl) imgEl.src = data.image || '';
+    const safeImg = getSafeImageUrl(data.image);
+    if (imgEl) {
+      imgEl.src = safeImg || '';
+      imgEl.style.display = '';
+      imgEl.dataset.wikiTried = '';
+    }
     const titleEl = document.getElementById('game-extracted-title');
     if (titleEl) titleEl.textContent = data.title;
     const playersEl = document.getElementById('game-extracted-players');
@@ -1378,6 +1443,127 @@ const app = {
     }
   },
 
+  async fetchWikiCover(title) {
+    if (!title) return null;
+    try {
+      const cleanTitle = title.replace(/\(.*?\)/g, '').trim();
+      const res = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanTitle + ' board game')}&srlimit=1&utf8=&format=json&origin=*`
+      );
+      const data = await res.json();
+      const first = data?.query?.search?.[0];
+      if (!first || !first.title) return null;
+      const sumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(first.title)}`);
+      if (!sumRes.ok) return null;
+      const sumData = await sumRes.json();
+      return sumData.originalimage?.source || sumData.thumbnail?.source || null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  repairGameCoverInDb(title, newUrl) {
+    if (!title || !newUrl) return;
+    try {
+      let games = db.getGames();
+      let updated = false;
+      const cleanT = title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      games = games.map(g => {
+        const gTitle = (g.title || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        if (gTitle === cleanT || gTitle.includes(cleanT) || cleanT.includes(gTitle)) {
+          g.image = newUrl;
+          updated = true;
+        }
+        return g;
+      });
+      if (updated) {
+        db.saveGames(games);
+      }
+    } catch (e) {
+      console.warn('repairGameCoverInDb error:', e);
+    }
+  },
+
+  handleCoverError(imgEl, originalUrl) {
+    if (!imgEl) return;
+    const currentSrc = imgEl.src || '';
+
+    // Step 1: If it's a Wikimedia thumbnail that failed, try stripping /thumb/ to get the source image
+    if (currentSrc.includes('upload.wikimedia.org') && currentSrc.includes('/thumb/')) {
+      const directSrc = currentSrc.replace('/thumb/', '/').replace(/\/\d+px-[^\/]+$/, '');
+      if (directSrc !== currentSrc) {
+        imgEl.src = directSrc;
+        return;
+      }
+    }
+
+    // Step 2: Auto-resolve with live official box art from Wikipedia REST API using the title
+    const gameTitle = imgEl.alt || '';
+    if (gameTitle && !imgEl.dataset.wikiTried) {
+      imgEl.dataset.wikiTried = 'true';
+      this.fetchWikiCover(gameTitle).then(newUrl => {
+        if (newUrl && newUrl !== currentSrc) {
+          imgEl.src = newUrl;
+          this.repairGameCoverInDb(gameTitle, newUrl);
+        } else {
+          this.showFallbackCover(imgEl);
+        }
+      }).catch(() => {
+        this.showFallbackCover(imgEl);
+      });
+      return;
+    }
+
+    // Step 3: Show styled fallback gradient dice badge
+    this.showFallbackCover(imgEl);
+  },
+
+  showFallbackCover(imgEl) {
+    imgEl.style.display = 'none';
+    if (imgEl.nextElementSibling) {
+      imgEl.nextElementSibling.classList.remove('hidden');
+      imgEl.nextElementSibling.classList.add('flex');
+    }
+  },
+
+  handleExtractedImgError(imgEl) {
+    if (!imgEl) return;
+    const currentSrc = imgEl.src || '';
+    if (currentSrc.includes('upload.wikimedia.org') && currentSrc.includes('/thumb/')) {
+      const directSrc = currentSrc.replace('/thumb/', '/').replace(/\/\d+px-[^\/]+$/, '');
+      if (directSrc !== currentSrc) {
+        imgEl.src = directSrc;
+        return;
+      }
+    }
+    const title = document.getElementById('game-title')?.value || document.getElementById('game-magic-query')?.value || '';
+    if (title && !imgEl.dataset.wikiTried) {
+      imgEl.dataset.wikiTried = 'true';
+      this.fetchWikiCover(title).then(newUrl => {
+        if (newUrl) {
+          imgEl.src = newUrl;
+          const imageInput = document.getElementById('game-image');
+          if (imageInput) imageInput.value = newUrl;
+        }
+      });
+    }
+  },
+
+  handleSuggestionImgError(imgEl, title) {
+    if (!imgEl) return;
+    if (title && !imgEl.dataset.wikiTried) {
+      imgEl.dataset.wikiTried = 'true';
+      this.fetchWikiCover(title).then(newUrl => {
+        if (newUrl) imgEl.src = newUrl;
+        else imgEl.style.display = 'none';
+      }).catch(() => {
+        imgEl.style.display = 'none';
+      });
+    } else {
+      imgEl.style.display = 'none';
+    }
+  },
+
   getGameCoverHtml(game, type = 'card') {
     const safeTitle = (game.title || 'Juego').replace(/"/g, '&quot;');
     const colors = [
@@ -1392,17 +1578,21 @@ const app = {
     for (let i = 0; i < safeTitle.length; i++) hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
     const colorGrad = colors[Math.abs(hash) % colors.length];
 
+    const safeUrl = getSafeImageUrl(game.image);
+    const rawUrlEscaped = (game.image || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+
     if (type === 'session') {
       return `
         <div class="relative w-full h-full bg-slate-900">
-          ${game.image ? `
-            <img src="${game.image}" 
+          ${safeUrl ? `
+            <img src="${safeUrl}" 
                  alt="${safeTitle}" 
                  loading="lazy"
-                 onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" 
+                 referrerpolicy="no-referrer"
+                 onerror="app.handleCoverError(this, '${rawUrlEscaped}')" 
                  class="w-full h-full object-cover">
           ` : ''}
-          <div class="absolute inset-0 ${game.image ? 'hidden' : 'flex'} bg-gradient-to-br ${colorGrad} p-4 flex flex-col justify-center items-center text-white text-center">
+          <div class="absolute inset-0 ${safeUrl ? 'hidden' : 'flex'} bg-gradient-to-br ${colorGrad} p-4 flex flex-col justify-center items-center text-white text-center">
             <i class="fa-solid fa-dice-d20 text-3xl opacity-80 mb-1"></i>
             <span class="font-extrabold text-sm drop-shadow-sm">${safeTitle}</span>
           </div>
@@ -1412,14 +1602,15 @@ const app = {
 
     return `
       <div class="w-20 h-24 rounded-xl overflow-hidden shrink-0 bg-slate-900 shadow-sm relative flex items-center justify-center cursor-pointer group" onclick="app.showGameDetail('${game.id}')" title="Ver reseña de ${safeTitle}">
-        ${game.image ? `
-          <img src="${game.image}" 
+        ${safeUrl ? `
+          <img src="${safeUrl}" 
                alt="${safeTitle}" 
                loading="lazy"
-               onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" 
+               referrerpolicy="no-referrer"
+               onerror="app.handleCoverError(this, '${rawUrlEscaped}')" 
                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
         ` : ''}
-        <div class="absolute inset-0 ${game.image ? 'hidden' : 'flex'} bg-gradient-to-br ${colorGrad} p-2 flex flex-col justify-between items-center text-white text-center">
+        <div class="absolute inset-0 ${safeUrl ? 'hidden' : 'flex'} bg-gradient-to-br ${colorGrad} p-2 flex flex-col justify-between items-center text-white text-center">
           <i class="fa-solid fa-dice-d20 text-base opacity-90 mt-1"></i>
           <span class="text-[10px] font-black leading-tight line-clamp-2">${safeTitle}</span>
           <span class="text-[8px] font-bold uppercase tracking-wider text-white/90 bg-black/30 px-1.5 py-0.5 rounded-full">Juego</span>
@@ -1730,9 +1921,10 @@ const app = {
     // Render local catalog matches
     localMatches.forEach(g => {
       const escapedTitle = g.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      const safeImg = getSafeImageUrl(g.image);
       html += `
         <div onclick="app.selectSuggestedCatalogGame('${escapedTitle}')" class="p-2.5 hover:bg-brand-50/80 active:bg-brand-100 cursor-pointer flex items-center gap-3 transition-colors">
-          <img src="${g.image}" alt="${g.title}" loading="lazy" class="w-10 h-12 object-cover rounded-lg bg-slate-900 shrink-0 shadow-2xs">
+          <img src="${safeImg}" alt="${g.title}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null; app.handleSuggestionImgError(this, '${escapedTitle}')" class="w-10 h-12 object-cover rounded-lg bg-slate-900 shrink-0 shadow-2xs">
           <div class="flex-1 min-w-0">
             <div class="font-extrabold text-xs text-slate-900 truncate flex items-center gap-1.5">
               <span>${g.title}</span>
@@ -1793,11 +1985,13 @@ const app = {
     const queryInput = document.getElementById('game-magic-query');
     if (queryInput) queryInput.value = game.title;
 
+    const safeImg = getSafeImageUrl(game.image);
+
     document.getElementById('game-title').value = game.title;
     document.getElementById('game-min').value = game.minPlayers;
     document.getElementById('game-max').value = game.maxPlayers;
     document.getElementById('game-duration').value = game.durationMin;
-    document.getElementById('game-image').value = game.image;
+    document.getElementById('game-image').value = safeImg;
     document.getElementById('game-desc').value = game.description;
 
     this.showExtractedCard({
@@ -1805,8 +1999,20 @@ const app = {
       minPlayers: game.minPlayers,
       maxPlayers: game.maxPlayers,
       durationMin: game.durationMin,
-      image: game.image,
+      image: safeImg,
       description: game.description
+    });
+
+    // Auto-verify and upgrade image with official Wikipedia cover in background
+    this.fetchWikiCover(game.title).then(wikiCover => {
+      if (wikiCover) {
+        document.getElementById('game-image').value = wikiCover;
+        const imgEl = document.getElementById('game-extracted-img');
+        if (imgEl) {
+          imgEl.src = wikiCover;
+          imgEl.style.display = '';
+        }
+      }
     });
 
     const clearBtn = document.getElementById('btn-clear-query');
@@ -1883,11 +2089,12 @@ const app = {
       );
 
       if (foundInCatalog) {
+        const catImage = getSafeImageUrl(foundInCatalog.image);
         document.getElementById('game-title').value = foundInCatalog.title;
         document.getElementById('game-min').value = foundInCatalog.minPlayers;
         document.getElementById('game-max').value = foundInCatalog.maxPlayers;
         document.getElementById('game-duration').value = foundInCatalog.durationMin;
-        document.getElementById('game-image').value = foundInCatalog.image;
+        document.getElementById('game-image').value = catImage;
         document.getElementById('game-desc').value = foundInCatalog.description;
         
         this.showExtractedCard({
@@ -1895,8 +2102,20 @@ const app = {
           minPlayers: foundInCatalog.minPlayers,
           maxPlayers: foundInCatalog.maxPlayers,
           durationMin: foundInCatalog.durationMin,
-          image: foundInCatalog.image,
+          image: catImage,
           description: foundInCatalog.description
+        });
+
+        // Upgrade with verified official Wikipedia cover in background
+        this.fetchWikiCover(foundInCatalog.title).then(wikiCover => {
+          if (wikiCover) {
+            document.getElementById('game-image').value = wikiCover;
+            const imgEl = document.getElementById('game-extracted-img');
+            if (imgEl) {
+              imgEl.src = wikiCover;
+              imgEl.style.display = '';
+            }
+          }
         });
 
         if (navigator.vibrate) navigator.vibrate(30);
@@ -1920,12 +2139,11 @@ const app = {
         if (enFirst) {
           englishTitle = enFirst.title;
           
-          // Get Box Cover
+          // Get Official Box Cover directly without broken thumbnail scaling
           const enSummaryRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(englishTitle)}`);
           const enSummary = await enSummaryRes.json();
-          if (enSummary.thumbnail && enSummary.thumbnail.source) {
-            const rawWikiUrl = enSummary.thumbnail.source.replace(/\/\d+px-/, '/500px-');
-            boxArtUrl = `https://images.weserv.nl/?url=${encodeURIComponent(rawWikiUrl)}&w=500&output=jpg`;
+          if (enSummary.originalimage?.source || enSummary.thumbnail?.source) {
+            boxArtUrl = getSafeImageUrl(enSummary.originalimage?.source || enSummary.thumbnail?.source);
           }
 
           // Parse Infobox wikitext for real min/max players & playing time
@@ -1978,9 +2196,8 @@ const app = {
           if (esSummary.title) {
             detectedTitle = esSummary.title.replace(/\(juego.*?\)/i, '').trim();
           }
-          if (!boxArtUrl && esSummary.thumbnail && esSummary.thumbnail.source) {
-            const rawWikiUrl = esSummary.thumbnail.source.replace(/\/\d+px-/, '/500px-');
-            boxArtUrl = `https://images.weserv.nl/?url=${encodeURIComponent(rawWikiUrl)}&w=500&output=jpg`;
+          if (!boxArtUrl && (esSummary.originalimage?.source || esSummary.thumbnail?.source)) {
+            boxArtUrl = getSafeImageUrl(esSummary.originalimage?.source || esSummary.thumbnail?.source);
           }
         }
       } catch (e) {
@@ -1992,7 +2209,7 @@ const app = {
         spanishReview = `${detectedTitle || rawQuery} es un reconocido juego de mesa de estrategia y entretenimiento para ${extractedMin} a ${extractedMax} jugadores con una duración aproximada de ${extractedDuration} minutos.`;
       }
 
-      const finalCover = boxArtUrl || 'https://images.weserv.nl/?url=https://upload.wikimedia.org/wikipedia/en/a/a3/Catan-2015-boxart.jpg&w=500&output=jpg';
+      const finalCover = boxArtUrl || getSafeImageUrl('https://upload.wikimedia.org/wikipedia/en/a/a3/Catan-2015-boxart.jpg');
 
       // Populate ALL inputs automatically so user doesn't have to fill anything
       document.getElementById('game-title').value = detectedTitle || rawQuery;
@@ -2387,18 +2604,39 @@ const app = {
   handleCreateOrUpdateGame(event) {
     event.preventDefault();
     const editId = document.getElementById('game-edit-id').value;
-    const title = document.getElementById('game-title').value.trim();
+    const magicQuery = document.getElementById('game-magic-query')?.value?.trim() || '';
+    let title = document.getElementById('game-title').value.trim();
+    if (!title && magicQuery) {
+      title = magicQuery;
+    }
+    if (!title) {
+      alert('Por favor escribe el nombre del juego.');
+      const queryEl = document.getElementById('game-magic-query');
+      if (queryEl) queryEl.focus();
+      return;
+    }
+
     const minPlayers = parseInt(document.getElementById('game-min').value) || 2;
     const maxPlayers = parseInt(document.getElementById('game-max').value) || 4;
     const durationMin = parseInt(document.getElementById('game-duration').value) || 60;
     const ownerId = document.getElementById('game-owner-id').value;
     let image = document.getElementById('game-image').value.trim();
-    const description = document.getElementById('game-desc').value.trim();
+    let description = document.getElementById('game-desc').value.trim();
 
-    // Auto-wrap raw BGG or Wikimedia images via Weserv proxy to guarantee CORS and zero-blocking
-    if (image && (image.includes('geekdo-images.com') || image.includes('upload.wikimedia.org')) && !image.includes('images.weserv.nl')) {
-      image = `https://images.weserv.nl/?url=${encodeURIComponent(image)}&w=500&output=jpg`;
+    // If image is empty, check if we have a match in the popular catalog
+    if (!image) {
+      const cleanTitle = title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const match = POPULAR_GAMES_CATALOG.find(cat => 
+        cat.names.some(n => cleanTitle.includes(n) || n.includes(cleanTitle))
+      );
+      if (match) {
+        image = match.image;
+        if (!description) description = match.description;
+      }
     }
+
+    // Sanitize image URL to use WordPress Photon edge CDN
+    image = getSafeImageUrl(image);
 
     let games = db.getGames();
 
@@ -2413,8 +2651,8 @@ const app = {
           maxPlayers,
           durationMin,
           ownerId,
-          image,
-          description
+          image: image || games[idx].image,
+          description: description || games[idx].description
         };
       }
     } else {
@@ -2433,6 +2671,9 @@ const app = {
     }
 
     db.saveGames(games);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
 
     this.closeModal('modal-game');
     document.getElementById('form-new-game').reset();

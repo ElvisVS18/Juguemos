@@ -581,7 +581,7 @@
           </div>
 
           <div class="flex gap-3">
-            <img id="game-extracted-img" src="" alt="Portada" class="w-20 h-24 rounded-xl object-cover bg-slate-900 shrink-0 shadow-xs">
+            <img id="game-extracted-img" src="" alt="Portada" referrerpolicy="no-referrer" onerror="this.onerror=null; app.handleExtractedImgError(this);" class="w-20 h-24 rounded-xl object-cover bg-slate-900 shrink-0 shadow-xs">
             <div class="flex-1 min-w-0 space-y-1">
               <h4 id="game-extracted-title" class="font-extrabold text-sm text-slate-900 truncate">Título</h4>
               <div class="flex flex-wrap gap-1.5 pt-0.5">
@@ -609,55 +609,13 @@
           </select>
         </div>
 
-        <!-- Collapsible Details (For optional manual adjustments if desired) -->
-        <details class="group bg-slate-50 rounded-2xl border border-slate-200 text-xs overflow-hidden">
-          <summary class="p-3 font-bold text-slate-600 cursor-pointer flex items-center justify-between select-none">
-            <span class="flex items-center gap-1.5 text-[11px]">
-              <i class="fa-solid fa-sliders text-slate-400"></i> Ajustar datos manualmente (opcional)
-            </span>
-            <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 group-open:rotate-180 transition-transform"></i>
-          </summary>
-
-          <div class="p-3 pt-0 space-y-3 border-t border-slate-200/60 bg-white">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Nombre</label>
-              <input type="text" id="game-title" placeholder="Ej. Wingspan" required class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium">
-            </div>
-
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">Jugadores Mín.</label>
-                <input type="number" id="game-min" min="1" max="20" value="2" required class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium">
-              </div>
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">Jugadores Máx.</label>
-                <input type="number" id="game-max" min="1" max="30" value="4" required class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium">
-              </div>
-            </div>
-
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Duración (minutos)</label>
-              <input type="number" id="game-duration" step="15" value="60" required class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium">
-            </div>
-
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">URL de Portada</label>
-              <div class="flex gap-2">
-                <input type="url" id="game-image" oninput="app.updateImagePreview(this.value)" placeholder="https://..." class="flex-1 border border-slate-300 rounded-xl p-2 text-xs bg-slate-50">
-                <label class="cursor-pointer px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 flex items-center gap-1 shrink-0">
-                  <i class="fa-solid fa-camera"></i>
-                  <span>Foto</span>
-                  <input type="file" id="game-file-input" accept="image/*" onchange="app.handleFileUpload(event)" class="hidden">
-                </label>
-              </div>
-            </div>
-
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Reseña</label>
-              <textarea id="game-desc" rows="3" placeholder="Reseña, temática y mecánicas..." class="w-full border border-slate-300 rounded-xl p-2 text-xs bg-slate-50 font-medium"></textarea>
-            </div>
-          </div>
-        </details>
+        <!-- Campos de datos automáticos (sin campos manuales que saturen la pantalla) -->
+        <input type="hidden" id="game-title" value="">
+        <input type="hidden" id="game-min" value="2">
+        <input type="hidden" id="game-max" value="4">
+        <input type="hidden" id="game-duration" value="60">
+        <input type="hidden" id="game-image" value="">
+        <input type="hidden" id="game-desc" value="">
 
         <div class="pt-2">
           <button type="submit" class="w-full py-3.5 bg-brand-600 active:bg-brand-700 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2">
@@ -744,6 +702,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>
