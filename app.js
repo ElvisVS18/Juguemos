@@ -1640,6 +1640,8 @@ const app = {
     if (gameSelect) {
       gameSelect.innerHTML = games.map(g => `<option value="${g.id}">${g.title} (${g.minPlayers}-${g.maxPlayers} jug.)</option>`).join('');
     }
+
+    this.populateFriendColorSelect();
   },
 
   openNewGameModal() {
@@ -1724,6 +1726,123 @@ const app = {
     setTimeout(() => {
       if (btn) btn.innerHTML = `<i class="fa-solid fa-plug"></i><span>Conectar y Probar</span>`;
     }, 3000);
+  },
+
+  async fetchBggData(query) {
+    if (!query) return null;
+    const cleanQ = query.trim();
+
+    const fetchWithTimeout = async (url, timeoutMs = 4500) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        return response;
+      } catch (err) {
+        clearTimeout(id);
+        throw err;
+      }
+    };
+
+    try {
+      // 1. Search BGG for Game ID via AllOrigins CORS Proxy or corsproxy fallback
+      const bggSearchUrl = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(cleanQ)}`;
+      let searchXmlText = '';
+
+      try {
+        const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(bggSearchUrl)}`, 4000);
+        if (res.ok) searchXmlText = await res.text();
+      } catch (e) {
+        try {
+          const res = await fetchWithTimeout(`https://corsproxy.io/?${encodeURIComponent(bggSearchUrl)}`, 4000);
+          if (res.ok) searchXmlText = await res.text();
+        } catch (e2) {}
+      }
+
+      if (!searchXmlText) return null;
+
+      const parser = new DOMParser();
+      const searchDoc = parser.parseFromString(searchXmlText, 'application/xml');
+      const items = searchDoc.querySelectorAll('item');
+      if (!items || items.length === 0) return null;
+
+      // Match best item (exact name match or first item)
+      let matchedItem = items[0];
+      const qLower = cleanQ.toLowerCase();
+      for (const it of items) {
+        const nameNode = it.querySelector('name[type="primary"]') || it.querySelector('name');
+        const nameVal = (nameNode ? nameNode.getAttribute('value') : '').toLowerCase();
+        if (nameVal === qLower) {
+          matchedItem = it;
+          break;
+        }
+      }
+
+      const bggId = matchedItem.getAttribute('id');
+      if (!bggId) return null;
+
+      // 2. Fetch full Game Thing details from BGG
+      const bggThingUrl = `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`;
+      let thingXmlText = '';
+
+      try {
+        const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(bggThingUrl)}`, 4500);
+        if (res.ok) thingXmlText = await res.text();
+      } catch (e) {
+        try {
+          const res = await fetchWithTimeout(`https://corsproxy.io/?${encodeURIComponent(bggThingUrl)}`, 4500);
+          if (res.ok) thingXmlText = await res.text();
+        } catch (e2) {}
+      }
+
+      if (!thingXmlText) return null;
+
+      const thingDoc = parser.parseFromString(thingXmlText, 'application/xml');
+      const itemNode = thingDoc.querySelector('item');
+      if (!itemNode) return null;
+
+      const primaryNameNode = itemNode.querySelector('name[type="primary"]') || itemNode.querySelector('name');
+      const title = primaryNameNode ? primaryNameNode.getAttribute('value') : cleanQ;
+
+      const imgNode = itemNode.querySelector('image') || itemNode.querySelector('thumbnail');
+      let imgUrl = imgNode ? imgNode.textContent.trim() : '';
+      if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
+
+      const minP = parseInt(itemNode.querySelector('minplayers')?.getAttribute('value')) || 2;
+      const maxP = parseInt(itemNode.querySelector('maxplayers')?.getAttribute('value')) || 4;
+      const duration = parseInt(itemNode.querySelector('playingtime')?.getAttribute('value')) ||
+                       parseInt(itemNode.querySelector('maxplaytime')?.getAttribute('value')) || 60;
+
+      let desc = itemNode.querySelector('description')?.textContent || '';
+      if (desc) {
+        const d = document.createElement('div');
+        d.innerHTML = desc;
+        desc = (d.textContent || d.innerText || '')
+          .replace(/&#10;/g, '\n')
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .trim();
+        if (desc.length > 500) {
+          desc = desc.substring(0, 500) + '...';
+        }
+      }
+
+      return {
+        id: bggId,
+        title,
+        minPlayers: minP,
+        maxPlayers: maxP,
+        durationMin: duration,
+        image: getSafeImageUrl(imgUrl),
+        description: desc
+      };
+    } catch (err) {
+      console.warn('fetchBggData error:', err);
+      return null;
+    }
   },
 
   async fetchWikiCover(title) {
@@ -2420,7 +2539,47 @@ const app = {
         return;
       }
 
-      // 2. Search English Wikipedia for Official Box Art & Infobox Data (players, time)
+      // 2. Query Official BoardGameGeek (BGG) Database via XMLAPI2
+      let bggData = null;
+      try {
+        bggData = await this.fetchBggData(rawQuery);
+      } catch (bggErr) {
+        console.warn('BGG query error:', bggErr);
+      }
+
+      if (bggData && bggData.title) {
+        const finalTitle = bggData.title;
+        const finalMin = bggData.minPlayers || 2;
+        const finalMax = bggData.maxPlayers || 4;
+        const finalDuration = bggData.durationMin || 60;
+        let finalCover = bggData.image || '';
+        let finalDesc = bggData.description || '';
+
+        if (!finalDesc || finalDesc.length < 40) {
+          finalDesc = `${finalTitle} es un aclamado juego de mesa de estrategia para ${finalMin} a ${finalMax} jugadores con una duración aproximada de ${finalDuration} minutos.`;
+        }
+
+        document.getElementById('game-title').value = finalTitle;
+        document.getElementById('game-min').value = finalMin;
+        document.getElementById('game-max').value = finalMax;
+        document.getElementById('game-duration').value = finalDuration;
+        document.getElementById('game-image').value = finalCover;
+        document.getElementById('game-desc').value = finalDesc;
+
+        this.showExtractedCard({
+          title: finalTitle,
+          minPlayers: finalMin,
+          maxPlayers: finalMax,
+          durationMin: finalDuration,
+          image: finalCover,
+          description: finalDesc
+        });
+
+        if (navigator.vibrate) navigator.vibrate(30);
+        return;
+      }
+
+      // 3. Fallback: Search English Wikipedia for Official Box Art & Infobox Data (players, time)
       let boxArtUrl = '';
       let extractedMin = 2;
       let extractedMax = 4;
@@ -2595,7 +2754,7 @@ const app = {
 
       const todayStr = new Date().toISOString().split('T')[0];
       const sessionDateStr = (session.date || '').split('T')[0];
-      const isPast = sessionDateStr < todayStr;
+      const isPastDate = sessionDateStr < todayStr;
 
       // Date & time formatted safely for phone
       const dateParts = sessionDateStr.split('-');
@@ -2609,8 +2768,14 @@ const app = {
         cleanTime = (cleanTime.split('T')[1] || '').substring(0, 5) || '19:30';
       }
 
+      // Check if session has started or past based on exact date & time
+      const sessionDateTime = new Date(`${sessionDateStr}T${cleanTime}:00`);
+      const now = new Date();
+      const isStartedOrPast = !isNaN(sessionDateTime.getTime()) ? (now >= sessionDateTime) : isPastDate;
+      const winnerFriend = session.winnerId ? friends.find(f => f.id === session.winnerId) : null;
+
       return `
-        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col ${isPast ? 'opacity-90' : ''}">
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col ${isPastDate ? 'opacity-90' : ''}">
           
           <!-- Card Header Image & Badges -->
           <div class="relative h-36 bg-slate-900 overflow-hidden">
@@ -2623,17 +2788,19 @@ const app = {
                 <i class="fa-solid fa-clock text-amber-300"></i> ~${game.durationMin} min
               </span>
 
-              ${isPast 
-                ? `<span class="bg-slate-800/90 text-slate-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-slate-600"><i class="fa-solid fa-flag-checkered text-emerald-400"></i> Partida Jugada</span>`
-                : isFull 
-                  ? `<span class="bg-rose-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1"><i class="fa-solid fa-lock text-[9px]"></i> Mesa Llena</span>`
-                  : `<span class="bg-emerald-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1"><i class="fa-solid fa-chair text-[9px]"></i> ${spotsLeft} cupo${spotsLeft > 1 ? 's' : ''} libre${spotsLeft > 1 ? 's' : ''}</span>`
+              ${session.winnerId
+                ? `<span class="bg-amber-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-amber-300/40"><i class="fa-solid fa-crown text-[9px] text-amber-200"></i> Ganó: ${(winnerFriend ? winnerFriend.name.split(' ')[0] : 'Registrado')}</span>`
+                : isStartedOrPast
+                  ? `<span class="bg-indigo-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 animate-pulse"><i class="fa-solid fa-trophy text-[9px] text-amber-300"></i> Partida Concluida</span>`
+                  : isFull 
+                    ? `<span class="bg-rose-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1"><i class="fa-solid fa-lock text-[9px]"></i> Mesa Llena</span>`
+                    : `<span class="bg-emerald-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1"><i class="fa-solid fa-chair text-[9px]"></i> ${spotsLeft} cupo${spotsLeft > 1 ? 's' : ''} libre${spotsLeft > 1 ? 's' : ''}</span>`
               }
             </div>
 
             <!-- Bottom title over image -->
             <div class="absolute bottom-2.5 left-3.5 right-3.5 text-white">
-              <div class="text-[11px] font-bold text-brand-300 uppercase tracking-wide">${dateText} • ${cleanTime} hrs ${isPast ? '(Pasada)' : ''}</div>
+              <div class="text-[11px] font-bold text-brand-300 uppercase tracking-wide">${dateText} • ${cleanTime} hrs ${isStartedOrPast ? '(Concluida)' : ''}</div>
               <h3 class="text-lg font-black leading-tight drop-shadow-sm">${game.title}</h3>
             </div>
           </div>
@@ -2649,6 +2816,51 @@ const app = {
               <p class="text-[11px] bg-slate-50 text-slate-600 p-2 rounded-xl border border-slate-100 italic">
                 "${session.notes}"
               </p>
+            ` : ''}
+
+            <!-- Winner Showcase Banner (if winner recorded) -->
+            ${session.winnerId ? `
+              <div class="p-3 rounded-2xl bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50 border border-amber-200 shadow-2xs flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center text-base shadow-xs shrink-0">
+                    <i class="fa-solid fa-crown text-amber-100"></i>
+                  </div>
+                  <div class="min-w-0">
+                    <span class="text-[9px] font-black uppercase text-amber-700 tracking-wider">🏆 Victoria Registrada</span>
+                    <div class="flex items-center gap-1.5 text-xs font-black text-amber-950 truncate">
+                      ${getMeepleSvg(winnerFriend ? winnerFriend.color : 'bg-amber-500', 16)}
+                      <span class="truncate">${winnerFriend ? winnerFriend.name : 'Ganador'}</span>
+                    </div>
+                    ${session.resultNotes ? `<p class="text-[10px] text-amber-800 italic truncate mt-0.5">"${session.resultNotes}"</p>` : ''}
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button onclick="app.shareWinnerToWhatsapp('${session.id}')" title="Celebrar victoria en WhatsApp" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-[11px] rounded-xl shadow-xs flex items-center gap-1 transition-colors">
+                    <i class="fa-brands fa-whatsapp text-xs"></i>
+                    <span>Celebrar</span>
+                  </button>
+                  <button onclick="app.openSessionResultsModal('${session.id}')" title="Modificar ganador" class="w-7 h-7 rounded-lg bg-amber-100 hover:bg-amber-200 active:bg-amber-300 text-amber-800 flex items-center justify-center text-xs transition-colors">
+                    <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+            ` : isStartedOrPast ? `
+              <!-- Register Winner Prompt (Partida en curso o pasada sin ganador) -->
+              <div class="p-3 rounded-2xl bg-gradient-to-r from-amber-50 via-purple-50 to-brand-50 border border-amber-200/90 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                <div class="flex items-center gap-2 min-w-0">
+                  <div class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center text-sm shadow-xs shrink-0">
+                    <i class="fa-solid fa-trophy text-amber-100"></i>
+                  </div>
+                  <div>
+                    <h4 class="font-bold text-xs text-slate-900 leading-tight">¿Quién se llevó la victoria?</h4>
+                    <p class="text-[10px] text-slate-500">La partida ya comenzó. Registra al ganador para las estadísticas.</p>
+                  </div>
+                </div>
+                <button onclick="app.openSessionResultsModal('${session.id}')" class="w-full sm:w-auto px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 active:from-amber-600 active:to-amber-700 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 shrink-0 transition-transform active:scale-95">
+                  <i class="fa-solid fa-crown text-amber-200 text-xs"></i>
+                  <span>Registrar Ganador</span>
+                </button>
+              </div>
             ` : ''}
 
             <!-- Attendees Progress Bar & Avatars -->
@@ -2694,20 +2906,22 @@ const app = {
           <!-- Mobile Action Footer: RSVP + WhatsApp Share + Delete -->
           <div class="bg-slate-50/90 border-t border-slate-200/70 p-3 flex flex-col gap-2">
             
-            <!-- Quick RSVP (Thumb-Friendly Buttons) -->
-            <div class="grid grid-cols-3 gap-1.5">
-              <button onclick="app.setRsvp('${session.id}', 'yes')" class="py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 ${myRsvp === 'yes' ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-300' : 'bg-white text-slate-700 border border-slate-200 active:bg-emerald-50'}">
-                <i class="fa-solid fa-check text-[11px]"></i> Voy
-              </button>
+            ${!isStartedOrPast ? `
+              <!-- Quick RSVP (Thumb-Friendly Buttons) -->
+              <div class="grid grid-cols-3 gap-1.5">
+                <button onclick="app.setRsvp('${session.id}', 'yes')" class="py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 ${myRsvp === 'yes' ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-300' : 'bg-white text-slate-700 border border-slate-200 active:bg-emerald-50'}">
+                  <i class="fa-solid fa-check text-[11px]"></i> Voy
+                </button>
 
-              <button onclick="app.setRsvp('${session.id}', 'maybe')" class="py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 ${myRsvp === 'maybe' ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-300' : 'bg-white text-slate-700 border border-slate-200 active:bg-amber-50'}">
-                <i class="fa-solid fa-question text-[11px]"></i> Quizás
-              </button>
+                <button onclick="app.setRsvp('${session.id}', 'maybe')" class="py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 ${myRsvp === 'maybe' ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-300' : 'bg-white text-slate-700 border border-slate-200 active:bg-amber-50'}">
+                  <i class="fa-solid fa-question text-[11px]"></i> Quizás
+                </button>
 
-              <button onclick="app.setRsvp('${session.id}', 'no')" class="py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 ${myRsvp === 'no' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-200 active:bg-rose-50'}">
-                <i class="fa-solid fa-xmark text-[11px]"></i> No voy
-              </button>
-            </div>
+                <button onclick="app.setRsvp('${session.id}', 'no')" class="py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 ${myRsvp === 'no' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-200 active:bg-rose-50'}">
+                  <i class="fa-solid fa-xmark text-[11px]"></i> No voy
+                </button>
+              </div>
+            ` : ''}
 
             <!-- Share & Delete Actions Row -->
             <div class="flex items-center gap-2 pt-0.5">
@@ -2851,6 +3065,206 @@ const app = {
     this.renderSessions();
   },
 
+  /* POST-SESSION RESULTS & WINNER RECORDING */
+  openSessionResultsModal(sessionId) {
+    const sessions = db.getSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const games = db.getGames();
+    const game = games.find(g => g.id === session.gameId);
+    const friends = db.getFriends();
+
+    document.getElementById('results-session-id').value = sessionId;
+
+    // Render game info header
+    const infoContainer = document.getElementById('results-game-info');
+    if (infoContainer) {
+      const coverUrl = getSafeImageUrl(game?.image);
+      let cleanTime = session.time || '19:30';
+      if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
+
+      infoContainer.innerHTML = `
+        <div class="w-12 h-14 rounded-xl overflow-hidden bg-slate-900 shrink-0 shadow-xs">
+          ${coverUrl ? `<img src="${coverUrl}" alt="${game?.title || ''}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-brand-300"><i class="fa-solid fa-dice-d20"></i></div>`}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[10px] text-brand-600 font-extrabold uppercase tracking-wide">Partida Registrada</div>
+          <h4 class="font-black text-sm text-slate-900 truncate">${game?.title || 'Juego de mesa'}</h4>
+          <p class="text-[11px] text-slate-500 font-medium">${session.date} • ${cleanTime} hrs • ${session.location || 'Club'}</p>
+        </div>
+      `;
+    }
+
+    // Determine candidate attendees
+    const rawAttendees = Array.isArray(session.attendees) ? session.attendees : [];
+    const validAttendees = rawAttendees.filter(a => friends.some(fr => fr.id === a.friendId));
+    let candidates = validAttendees.filter(a => a.status === 'yes').map(a => friends.find(f => f.id === a.friendId));
+    if (candidates.length === 0) {
+      candidates = validAttendees.map(a => friends.find(f => f.id === a.friendId));
+    }
+    if (candidates.length === 0) {
+      candidates = friends;
+    }
+
+    // Render winner selector radio pills
+    const selectorContainer = document.getElementById('results-winner-selector');
+    if (selectorContainer) {
+      selectorContainer.innerHTML = candidates.map(f => {
+        const isSelected = session.winnerId ? session.winnerId === f.id : false;
+        return `
+          <label class="p-2.5 rounded-2xl border ${isSelected ? 'border-amber-500 bg-amber-50/70 ring-2 ring-amber-300' : 'border-slate-200 bg-white hover:border-amber-300'} cursor-pointer flex items-center gap-2.5 transition-all">
+            <input type="radio" name="session-winner-choice" value="${f.id}" ${isSelected ? 'checked' : ''} class="sr-only" onchange="app.highlightWinnerRadio(this)">
+            <div class="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+              ${getMeepleSvg(f.color, 20)}
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="font-extrabold text-xs text-slate-900 truncate">${f.name}</div>
+              <div class="text-[9px] text-slate-400 font-bold">Jugador</div>
+            </div>
+            <i class="fa-solid fa-crown text-amber-500 text-sm ${isSelected ? 'block' : 'hidden'} winner-check-icon"></i>
+          </label>
+        `;
+      }).join('');
+    }
+
+    const notesInput = document.getElementById('results-notes');
+    if (notesInput) {
+      notesInput.value = session.resultNotes || '';
+    }
+
+    this.openModal('modal-session-results');
+  },
+
+  highlightWinnerRadio(radioEl) {
+    document.querySelectorAll('#results-winner-selector label').forEach(lbl => {
+      lbl.className = 'p-2.5 rounded-2xl border border-slate-200 bg-white hover:border-amber-300 cursor-pointer flex items-center gap-2.5 transition-all';
+      const icon = lbl.querySelector('.winner-check-icon');
+      if (icon) icon.classList.add('hidden');
+    });
+    const parentLabel = radioEl.closest('label');
+    if (parentLabel) {
+      parentLabel.className = 'p-2.5 rounded-2xl border border-amber-500 bg-amber-50/70 ring-2 ring-amber-300 cursor-pointer flex items-center gap-2.5 transition-all';
+      const icon = parentLabel.querySelector('.winner-check-icon');
+      if (icon) icon.classList.remove('hidden');
+    }
+  },
+
+  handleSaveSessionResults(event) {
+    event.preventDefault();
+    const sessionId = document.getElementById('results-session-id').value;
+    const selectedRadio = document.querySelector('input[name="session-winner-choice"]:checked');
+    if (!selectedRadio) {
+      alert('Por favor selecciona quién ganó la partida tocando sobre su nombre.');
+      return;
+    }
+
+    const winnerId = selectedRadio.value;
+    const notes = (document.getElementById('results-notes')?.value || '').trim();
+
+    const sessions = db.getSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    session.winnerId = winnerId;
+    if (notes) session.resultNotes = notes;
+
+    db.saveSessions(sessions);
+
+    this.closeModal('modal-session-results');
+    this.renderSessions();
+    this.renderGames();
+    this.renderFriends();
+
+    if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+
+    if (confirm('¡Victoria guardada y sumada a las estadísticas del Club!\n\n¿Deseas enviar el anuncio de celebración a WhatsApp ahora?')) {
+      this.shareWinnerToWhatsapp(sessionId);
+    }
+  },
+
+  /* WHATSAPP SHARING ENHANCEMENTS */
+  shareWinnerToWhatsapp(sessionId) {
+    const sessions = db.getSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session || !session.winnerId) return;
+
+    const games = db.getGames();
+    const game = games.find(g => g.id === session.gameId);
+    const friends = db.getFriends();
+    const winner = friends.find(f => f.id === session.winnerId);
+    if (!winner) return;
+
+    const attendees = Array.isArray(session.attendees) ? session.attendees.filter(a => a.status === 'yes') : [];
+    const attendeeNames = attendees
+      .map(a => friends.find(f => f.id === a.friendId)?.name?.split(' ')[0])
+      .filter(Boolean)
+      .join(', ');
+
+    const shareUrl = this.getShareUrl();
+
+    let msg = `🏆👑 *¡HABEMUS GANADOR EN EL CLUB!* 👑🏆%0A%0A` +
+      `🔥 *Juego:* ${game?.title || 'Juego de mesa'}%0A` +
+      `🥇 *Campeón de la partida:* *${winner.name}*%0A` +
+      `📅 *Fecha:* ${session.date}%0A` +
+      (attendeeNames ? `👥 *Rivales en mesa:* ${attendeeNames}%0A` : '') +
+      (session.resultNotes ? `💬 *Crónica:* "${session.resultNotes}"%0A%0A` : '%0A') +
+      `🎖️ _¡La victoria ya está registrada en el Salón de la Fama del Club!_%0A%0A` +
+      `📲 *Revisa el ranking completo aquí:*%0A${encodeURIComponent(shareUrl)}`;
+
+    window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+  },
+
+  shareLeaderboardToWhatsapp() {
+    const friends = db.getFriends();
+    const sessions = db.getSessions();
+    const shareUrl = this.getShareUrl();
+
+    const ranked = friends.map(f => {
+      const wins = sessions.filter(s => s.winnerId === f.id).length;
+      const attended = sessions.filter(s => s.attendees && s.attendees.some(a => a.friendId === f.id && a.status === 'yes')).length;
+      return { name: f.name, wins, attended };
+    }).sort((a, b) => b.wins - a.wins || b.attended - a.attended);
+
+    const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
+    let rows = ranked.map((r, i) => {
+      const medal = medals[i] || '🎖️';
+      return `${medal} *${r.name}* - ${r.wins} victoria${r.wins !== 1 ? 's' : ''} (${r.attended} partida${r.attended !== 1 ? 's' : ''})`;
+    }).join('%0A');
+
+    let msg = `🏆 *SALÓN DE LA FAMA - RANKING DEL CLUB* 🏆%0A%0A` +
+      `Así van las posiciones en la mesa de juegos:%0A%0A` +
+      rows + `%0A%0A` +
+      `⚔️ ¿Quién desafiará al líder en el próximo encuentro?%0A%0A` +
+      `📲 *Entra al club para organizar la revancha:*%0A${encodeURIComponent(shareUrl)}`;
+
+    window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+  },
+
+  shareGamePollToWhatsapp() {
+    const games = db.getGames();
+    if (games.length === 0) {
+      alert('Aún no hay juegos en la ludoteca para proponer.');
+      return;
+    }
+    const shareUrl = this.getShareUrl();
+
+    const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    const gameList = games.slice(0, 10).map((g, i) => {
+      const num = numberEmojis[i] || `[${i+1}]`;
+      return `${num} *${g.title}* (${g.minPlayers}-${g.maxPlayers} jug. • ~${g.durationMin}m)`;
+    }).join('%0A');
+
+    let msg = `🎲 *¿A QUÉ JUGAMOS ESTE FIN DE SEMANA?* 🎲%0A%0A` +
+      `Vota con el número de tu juego favorito respondiendo a este mensaje:%0A%0A` +
+      gameList + `%0A%0A` +
+      `👇 ¡El juego más votado va a la mesa!%0A%0A` +
+      `📲 *Revisa la ludoteca completa y las fichas aquí:*%0A${encodeURIComponent(shareUrl)}`;
+
+    window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+  },
+
   /* GAMES (LUDOTECA) */
   setPlayerFilter(val) {
     this.activePlayerFilter = val;
@@ -2869,6 +3283,8 @@ const app = {
   renderGames() {
     const games = db.getGames();
     const friends = db.getFriends();
+    const sessions = db.getSessions();
+    const todayStr = new Date().toISOString().split('T')[0];
     const search = (document.getElementById('filter-game-search')?.value || '').toLowerCase();
     const filter = this.activePlayerFilter;
 
@@ -2896,6 +3312,7 @@ const app = {
       const owner = friends.find(f => f.id === game.ownerId) || { name: 'Comunitario' };
       const coverHtml = this.getGameCoverHtml(game, 'card');
       const descSnippet = game.description || 'Sin reseña registrada. Toca modificar para agregar una.';
+      const timesPlayed = sessions.filter(s => s.gameId === game.id && (s.winnerId || ((s.date || '').split('T')[0] < todayStr))).length;
 
       return `
         <div class="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex gap-3.5 hover:shadow-sm transition-all">
@@ -2928,9 +3345,14 @@ const app = {
 
             <!-- Badges & Action Buttons -->
             <div class="flex items-center justify-between pt-2 mt-1 border-t border-slate-100">
-              <span class="text-[10px] font-bold text-brand-700 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-md">
-                ${game.minPlayers}-${game.maxPlayers} jug. • ${game.durationMin}m
-              </span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-bold text-brand-700 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-md">
+                  ${game.minPlayers}-${game.maxPlayers} jug. • ${game.durationMin}m
+                </span>
+                <span class="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <i class="fa-solid fa-gamepad text-[9px]"></i> ${timesPlayed} ${timesPlayed === 1 ? 'jugada' : 'jugadas'}
+                </span>
+              </div>
 
               <!-- Quick Action Buttons -->
               <div class="flex items-center gap-1.5">
@@ -3057,6 +3479,37 @@ const app = {
   },
 
   /* FRIENDS */
+  populateFriendColorSelect(selectedColor = null, currentFriendId = null) {
+    const select = document.getElementById('friend-color');
+    if (!select) return;
+    const friends = db.getFriends();
+
+    const emojiMap = {
+      'Rojo': '🔴', 'Azul': '🔵', 'Verde': '🟢', 'Amarillo': '🟡',
+      'Morado': '🟣', 'Naranja': '🟠', 'Negro': '⚫', 'Cian': '💎',
+      'Rosa': '🌸', 'Teal': '🌊', 'Café': '🟤', 'Gris': '⚪'
+    };
+
+    select.innerHTML = MEEPLE_COLORS.map(mc => {
+      const takenFriend = friends.find(f => f.id !== currentFriendId && f.color === mc.id);
+      const isSelected = selectedColor ? mc.id === selectedColor : false;
+      const emoji = emojiMap[mc.name] || '🎲';
+
+      if (takenFriend) {
+        return `<option value="${mc.id}" disabled class="text-slate-400 bg-slate-100">${emoji} Meeple ${mc.name} (En uso por ${takenFriend.name.split(' ')[0]})</option>`;
+      }
+      return `<option value="${mc.id}" ${isSelected ? 'selected' : ''}>${emoji} Meeple ${mc.name}</option>`;
+    }).join('');
+
+    const isCurrentColorTaken = friends.some(f => f.id !== currentFriendId && f.color === selectedColor);
+    if (!selectedColor || isCurrentColorTaken) {
+      const firstAvailable = MEEPLE_COLORS.find(mc => !friends.some(f => f.id !== currentFriendId && f.color === mc.id));
+      if (firstAvailable) select.value = firstAvailable.id;
+    } else {
+      select.value = selectedColor;
+    }
+  },
+
   renderFriends() {
     const friends = db.getFriends();
     const games = db.getGames();
@@ -3078,9 +3531,68 @@ const app = {
       return;
     }
 
-    container.innerHTML = friends.map(f => {
+    const totalWins = sessions.filter(s => s.winnerId).length;
+
+    const friendsWithStats = friends.map(f => {
       const owned = games.filter(g => g.ownerId === f.id).length;
       const attended = sessions.filter(s => s.attendees && s.attendees.some(a => a.friendId === f.id && a.status === 'yes')).length;
+      const wins = sessions.filter(s => s.winnerId === f.id).length;
+      const winRate = attended > 0 ? Math.round((wins / attended) * 100) : 0;
+      return { ...f, owned, attended, wins, winRate };
+    });
+
+    // Sort by wins descending, then winRate descending, then attended descending
+    const rankedFriends = [...friendsWithStats].sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.attended - a.attended);
+
+    let podiumHtml = '';
+    if (totalWins > 0) {
+      const top1 = rankedFriends[0];
+      const top2 = rankedFriends.length > 1 ? rankedFriends[1] : null;
+      const top3 = rankedFriends.length > 2 ? rankedFriends[2] : null;
+
+      podiumHtml = `
+        <div class="bg-gradient-to-br from-amber-500 via-amber-600 to-yellow-600 rounded-3xl p-4 text-white shadow-md space-y-3 mb-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-trophy text-amber-200 text-base"></i>
+              <h3 class="font-black text-sm uppercase tracking-wider text-amber-100">Salón de la Fama del Club</h3>
+            </div>
+            <button onclick="app.shareLeaderboardToWhatsapp()" class="px-2.5 py-1 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-md rounded-xl text-[10px] font-black flex items-center gap-1 transition-colors">
+              <i class="fa-brands fa-whatsapp"></i> Compartir
+            </button>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 items-end pt-1">
+            <!-- 2nd Place -->
+            <div class="bg-white/15 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center text-center">
+              <span class="text-xs font-black text-slate-200">🥈 2º</span>
+              <div class="my-1.5">${top2 ? getMeepleSvg(top2.color, 24) : '—'}</div>
+              <div class="font-extrabold text-xs truncate w-full">${top2 ? top2.name.split(' ')[0] : '—'}</div>
+              <div class="text-[10px] text-amber-200 font-bold">${top2 ? `${top2.wins} vict.` : '0'}</div>
+            </div>
+
+            <!-- 1st Place (Champion) -->
+            <div class="bg-white/25 backdrop-blur-md rounded-2xl p-3 flex flex-col items-center text-center -translate-y-1 ring-2 ring-amber-300 shadow-md">
+              <div class="text-amber-200 text-sm leading-none mb-0.5"><i class="fa-solid fa-crown animate-pulse"></i></div>
+              <span class="text-xs font-black text-amber-100">🥇 1º</span>
+              <div class="my-1.5 scale-110">${top1 ? getMeepleSvg(top1.color, 28) : '—'}</div>
+              <div class="font-black text-xs truncate w-full">${top1 ? top1.name.split(' ')[0] : '—'}</div>
+              <div class="text-[11px] text-amber-100 font-black">${top1 ? `${top1.wins} victorias` : '0'}</div>
+            </div>
+
+            <!-- 3rd Place -->
+            <div class="bg-white/15 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center text-center">
+              <span class="text-xs font-black text-amber-200/90">🥉 3º</span>
+              <div class="my-1.5">${top3 ? getMeepleSvg(top3.color, 24) : '—'}</div>
+              <div class="font-extrabold text-xs truncate w-full">${top3 ? top3.name.split(' ')[0] : '—'}</div>
+              <div class="text-[10px] text-amber-200 font-bold">${top3 ? `${top3.wins} vict.` : '0'}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    const cardsHtml = friendsWithStats.map(f => {
       const isMe = f.id === this.currentUserId;
 
       return `
@@ -3094,10 +3606,12 @@ const app = {
                 <h4 class="font-bold text-xs text-slate-900 truncate">${f.name}</h4>
                 ${isMe ? '<span class="text-[9px] font-extrabold bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>' : ''}
               </div>
-              <div class="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
-                <span><i class="fa-solid fa-chess-rook text-[9px] text-slate-400"></i> ${owned} juego${owned !== 1 ? 's' : ''}</span>
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                <span class="font-bold text-amber-600"><i class="fa-solid fa-crown text-[9px]"></i> ${f.wins} vict. (${f.winRate}%)</span>
                 <span>•</span>
-                <span><i class="fa-solid fa-calendar-check text-[9px] text-slate-400"></i> ${attended} partida${attended !== 1 ? 's' : ''}</span>
+                <span><i class="fa-solid fa-calendar-check text-[9px] text-slate-400"></i> ${f.attended} part.</span>
+                <span>•</span>
+                <span><i class="fa-solid fa-chess-rook text-[9px] text-slate-400"></i> ${f.owned} juego${f.owned !== 1 ? 's' : ''}</span>
               </div>
             </div>
           </div>
@@ -3113,6 +3627,8 @@ const app = {
         </div>
       `;
     }).join('');
+
+    container.innerHTML = podiumHtml + cardsHtml;
   },
 
   openNewFriendModal() {
@@ -3128,6 +3644,8 @@ const app = {
     const label = document.getElementById('btn-save-friend-label');
     if (label) label.textContent = 'Registrar Amigo';
 
+    this.populateFriendColorSelect();
+
     this.openModal('modal-friend');
     setTimeout(() => {
       const nameInput = document.getElementById('friend-name');
@@ -3142,7 +3660,7 @@ const app = {
 
     document.getElementById('friend-id').value = friend.id;
     document.getElementById('friend-name').value = friend.name;
-    document.getElementById('friend-color').value = friend.color || 'bg-violet-600';
+    this.populateFriendColorSelect(friend.color, friend.id);
 
     const heading = document.getElementById('modal-friend-heading');
     if (heading) heading.textContent = 'Modificar Amigo';
@@ -3166,12 +3684,18 @@ const app = {
 
     if (!name) return;
 
+    const friends = db.getFriends();
+    const isTaken = friends.some(f => f.id !== id && f.color === color);
+    if (isTaken) {
+      const takenBy = friends.find(f => f.id !== id && f.color === color);
+      alert(`⚠️ El color de Meeple seleccionado ya está en uso por ${takenBy ? takenBy.name : 'otro amigo'}.\n\nCada jugador del club debe tener un color exclusivo.`);
+      return;
+    }
+
     const parts = name.split(' ').filter(Boolean);
     const initials = parts.length > 1 
       ? (parts[0][0] + parts[1][0]).toUpperCase()
       : name.substring(0, 2).toUpperCase();
-
-    const friends = db.getFriends();
 
     if (id) {
       const idx = friends.findIndex(f => f.id === id);
@@ -3191,6 +3715,10 @@ const app = {
     }
 
     db.saveFriends(friends);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
+
     this.closeModal('modal-friend');
     const form = document.getElementById('form-new-friend');
     if (form) form.reset();
