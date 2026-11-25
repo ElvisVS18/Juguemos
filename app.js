@@ -3991,10 +3991,6 @@ const app = {
       };
       friends.push(newFriend);
     }
-        initials
-      };
-      friends.push(newFriend);
-    }
 
     db.saveFriends(friends);
     if (db.getGSheetUrl()) {
