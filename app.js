@@ -76,7 +76,7 @@ function getSafeImageUrl(rawUrl) {
 
 // Default friends for first load (founder Elvis)
 const DEFAULT_FRIENDS = [
-  { id: 'u1', name: 'Elvis', color: 'bg-red-600', initials: 'EL' }
+  { id: 'u1', name: 'Elvis', color: 'bg-red-600', initials: 'EL', phone: '999999999', pin: '1234', role: 'admin' }
 ];
 
 // Curated database with instant metadata, reviews & REAL official box art
@@ -718,8 +718,15 @@ const db = {
   getFriends() {
     try {
       const raw = localStorage.getItem('bg_friends');
-      const friends = raw ? JSON.parse(raw) : DEFAULT_FRIENDS;
-      if (Array.isArray(friends) && friends.length > 0) return friends;
+      let friends = raw ? JSON.parse(raw) : DEFAULT_FRIENDS;
+      if (Array.isArray(friends) && friends.length > 0) {
+        return friends.map(f => ({
+          ...f,
+          phone: f.phone || (f.id === 'u1' ? '999999999' : ''),
+          pin: f.pin || '1234',
+          role: f.role || (f.id === 'u1' ? 'admin' : 'member')
+        }));
+      }
     } catch (e) {}
     return DEFAULT_FRIENDS;
   },
@@ -1116,11 +1123,27 @@ const app = {
 
     this.setTab('sessions');
 
-    // INSTANT GATE: Show login/selection immediately at 0ms if not logged in this session
-    if (!sessionStorage.getItem('bg_user_entered')) {
-      this.openUserGate(false);
-    } else {
+    // INSTANT GATE: Check if device is authenticated with valid user ID & PIN
+    const authUserId = localStorage.getItem('bg_auth_user_id') || localStorage.getItem('bg_current_user');
+    const authUserPin = localStorage.getItem('bg_auth_user_pin');
+    const friends = db.getFriends();
+    const authenticatedFriend = friends.find(f => f.id === authUserId && (!authUserPin || (f.pin || '1234') === authUserPin));
+
+    if (authenticatedFriend && sessionStorage.getItem('bg_user_entered') === 'true') {
+      this.currentUserId = authenticatedFriend.id;
+      db.setCurrentUserId(authenticatedFriend.id);
       this.closeUserGate();
+    } else if (authenticatedFriend && authUserPin && (authenticatedFriend.pin || '1234') === authUserPin) {
+      // Remembered on this phone
+      this.currentUserId = authenticatedFriend.id;
+      db.setCurrentUserId(authenticatedFriend.id);
+      sessionStorage.setItem('bg_user_entered', 'true');
+      document.documentElement.classList.add('user-entered');
+      this.closeUserGate();
+    } else {
+      sessionStorage.removeItem('bg_user_entered');
+      document.documentElement.classList.remove('user-entered');
+      this.openUserGate(false);
     }
 
     // Secondary background sync to refresh any new updates
@@ -1527,6 +1550,37 @@ const app = {
       return;
     }
 
+    const friends = db.getFriends();
+    const friend = friends.find(f => f.id === val);
+    if (!friend) {
+      alert('No se encontró el perfil seleccionado.');
+      return;
+    }
+
+    const pinInput = document.getElementById('gate-login-pin');
+    const enteredPin = (pinInput?.value || '').trim();
+    const expectedPin = friend.pin || '1234';
+
+    if (!enteredPin) {
+      alert(`Por favor escribe el PIN de 4 dígitos de ${friend.name} para ingresar.\n(El PIN inicial es 1234)`);
+      if (pinInput) pinInput.focus();
+      return;
+    }
+
+    if (enteredPin !== expectedPin) {
+      alert(`⚠️ Clave PIN incorrecta para ${friend.name}.\n\nSi la olvidaste, el administrador del club puede ayudarte a revisarla o cambiarla en Google Sheets.`);
+      if (pinInput) {
+        pinInput.value = '';
+        pinInput.focus();
+      }
+      return;
+    }
+
+    // Login exitoso: recordar credenciales en este teléfono
+    localStorage.setItem('bg_auth_user_id', friend.id);
+    localStorage.setItem('bg_auth_user_pin', expectedPin);
+
+    if (pinInput) pinInput.value = '';
     this.selectUser(val);
   },
 
@@ -1534,13 +1588,46 @@ const app = {
     const nameInput = document.getElementById('gate-new-name');
     const name = nameInput ? nameInput.value.trim() : '';
 
+    const phoneInput = document.getElementById('gate-new-phone');
+    const phone = phoneInput ? phoneInput.value.trim() : '';
+
+    const pinInput = document.getElementById('gate-new-pin');
+    const pin = pinInput ? pinInput.value.trim() : '';
+
+    const pinConfirmInput = document.getElementById('gate-new-pin-confirm');
+    const pinConfirm = pinConfirmInput ? pinConfirmInput.value.trim() : '';
+
     if (!name) {
       alert('Por favor escribe tu nombre o apodo para registrarte.');
       if (nameInput) nameInput.focus();
       return;
     }
 
+    if (!phone || phone.length < 6) {
+      alert('Por favor escribe tu número de celular para que tus amigos puedan coordinar contigo.');
+      if (phoneInput) phoneInput.focus();
+      return;
+    }
+
+    if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+      alert('Tu clave PIN debe ser de exactamente 4 números (ej. 1234).');
+      if (pinInput) pinInput.focus();
+      return;
+    }
+
+    if (pin !== pinConfirm) {
+      alert('Las claves PIN ingresadas no coinciden. Por favor repite la misma clave en ambos campos.');
+      if (pinConfirmInput) pinConfirmInput.focus();
+      return;
+    }
+
     const friends = db.getFriends();
+    if (friends.some(f => f.phone && f.phone === phone)) {
+      alert('Ese número de celular ya está registrado por otro amigo del club.');
+      if (phoneInput) phoneInput.focus();
+      return;
+    }
+
     const takenColors = new Set(friends.map(f => f.color));
     const hiddenColor = document.getElementById('gate-selected-meeple-color');
     const color = hiddenColor?.value || this.selectedMeepleColor || 'bg-red-600';
@@ -1558,18 +1645,103 @@ const app = {
     const newFriend = {
       id: 'u_' + Date.now(),
       name,
+      phone,
+      pin,
       color,
-      initials
+      initials,
+      role: friends.length === 0 ? 'admin' : 'member'
     };
 
     friends.push(newFriend);
     db.saveFriends(friends);
+
+    localStorage.setItem('bg_auth_user_id', newFriend.id);
+    localStorage.setItem('bg_auth_user_pin', pin);
 
     if (db.getGSheetUrl()) {
       db.pushToGoogleSheets();
     }
 
     this.selectUser(newFriend.id);
+  },
+
+  openUserProfileModal() {
+    const friends = db.getFriends();
+    const current = friends.find(f => f.id === this.currentUserId) || friends[0];
+    if (!current) return;
+
+    const details = document.getElementById('user-profile-details');
+    if (details) {
+      const isAdmin = current.role === 'admin' || current.id === 'u1';
+      details.innerHTML = `
+        <div class="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center shrink-0">
+          ${getMeepleSvg(current.color, 28)}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5">
+            <h4 class="font-black text-sm text-slate-900 truncate">${current.name}</h4>
+            <span class="text-[9px] font-black px-1.5 py-0.5 rounded-full ${isAdmin ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'}">
+              ${isAdmin ? '👑 Admin' : '♟️ Jugador'}
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-500 font-medium mt-0.5"><i class="fa-brands fa-whatsapp text-emerald-600"></i> ${current.phone || 'Sin celular'}</p>
+          <p class="text-[10px] text-brand-600 font-bold mt-0.5"><i class="fa-solid fa-key text-[9px]"></i> PIN: •••• (Protegido)</p>
+        </div>
+      `;
+    }
+
+    this.openModal('modal-user-profile');
+  },
+
+  promptChangePin() {
+    const friends = db.getFriends();
+    const current = friends.find(f => f.id === this.currentUserId);
+    if (!current) return;
+
+    const currentPinPrompt = prompt('Ingresa tu PIN actual (4 dígitos):');
+    if (!currentPinPrompt) return;
+
+    if (currentPinPrompt.trim() !== (current.pin || '1234')) {
+      alert('Clave PIN actual incorrecta.');
+      return;
+    }
+
+    const newPin = prompt('Crea tu nuevo PIN de 4 dígitos numéricos:');
+    if (!newPin || newPin.trim().length !== 4 || !/^\d{4}$/.test(newPin.trim())) {
+      alert('El nuevo PIN debe tener exactamente 4 dígitos numéricos (ej. 5678).');
+      return;
+    }
+
+    current.pin = newPin.trim();
+    db.saveFriends(friends);
+    localStorage.setItem('bg_auth_user_pin', current.pin);
+
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
+
+    alert('¡Tu clave PIN fue actualizada con éxito!');
+    this.closeModal('modal-user-profile');
+  },
+
+  logoutUser() {
+    if (confirm('¿Deseas cerrar sesión en este teléfono? Tendrás que ingresar tu PIN para volver a entrar.')) {
+      localStorage.removeItem('bg_auth_user_id');
+      localStorage.removeItem('bg_auth_user_pin');
+      sessionStorage.removeItem('bg_user_entered');
+      document.documentElement.classList.remove('user-entered');
+      this.closeModal('modal-user-profile');
+      this.openUserGate(false);
+    }
+  },
+
+  canEditGame(game) {
+    const friends = db.getFriends();
+    const me = friends.find(f => f.id === this.currentUserId);
+    const isAdmin = me && (me.role === 'admin' || me.id === 'u1');
+    if (isAdmin) return true;
+    if (!game) return false;
+    return game.ownerId === this.currentUserId;
   },
 
   selectUser(userId) {
@@ -2027,6 +2199,7 @@ const app = {
     if (!game) return;
     const friends = db.getFriends();
     const owner = friends.find(f => f.id === game.ownerId) || { name: 'Comunitario' };
+    const canEdit = this.canEditGame(game);
 
     const content = document.getElementById('game-detail-content');
     content.innerHTML = `
@@ -2082,6 +2255,7 @@ const app = {
             <span>Programar Partida con este Juego</span>
           </button>
 
+          ${canEdit ? `
           <div class="grid grid-cols-2 gap-2">
             <button onclick="app.editGame('${game.id}')" class="py-2.5 bg-slate-100 active:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 flex items-center justify-center gap-1.5">
               <i class="fa-solid fa-pen-to-square text-brand-600"></i>
@@ -2093,6 +2267,11 @@ const app = {
               <span>Eliminar Juego</span>
             </button>
           </div>
+          ` : `
+          <div class="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-center">
+            <span class="text-[11px] text-slate-500 font-medium"><i class="fa-solid fa-lock text-slate-400 mr-1"></i> Solo ${owner.name} o el administrador pueden editar o eliminar este juego.</span>
+          </div>
+          `}
         </div>
       </div>
     `;
@@ -2110,6 +2289,11 @@ const app = {
     const games = db.getGames();
     const game = games.find(g => g.id === gameId);
     if (!game) return;
+
+    if (!this.canEditGame(game)) {
+      alert('Solo el dueño de este juego o el administrador tienen permiso para editarlo.');
+      return;
+    }
 
     document.getElementById('game-edit-id').value = game.id;
     const heading = document.getElementById('modal-game-heading');
@@ -2139,6 +2323,11 @@ const app = {
     const games = db.getGames();
     const game = games.find(g => g.id === gameId);
     if (!game) return;
+
+    if (!this.canEditGame(game)) {
+      alert('Solo el dueño de este juego o el administrador tienen permiso para eliminarlo.');
+      return;
+    }
 
     if (!confirm(`¿Estás seguro de que deseas eliminar "${game.title}" de la ludoteca?`)) {
       return;
@@ -2818,6 +3007,50 @@ const app = {
               </p>
             ` : ''}
 
+            <!-- Certified Draw Banner or Draw Button -->
+            ${session.drawData ? (() => {
+              let drawInfo = null;
+              try { drawInfo = typeof session.drawData === 'string' ? JSON.parse(session.drawData) : session.drawData; } catch(e){}
+              if (!drawInfo) return '';
+              return `
+                <div class="p-3 rounded-2xl bg-gradient-to-r from-indigo-50 via-purple-50 to-brand-50 border border-indigo-200 shadow-2xs flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-brand-700 text-white flex items-center justify-center text-sm shadow-xs shrink-0">
+                      <i class="fa-solid fa-certificate text-amber-300"></i>
+                    </div>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[9px] font-black uppercase text-indigo-700 tracking-wider">🎲 Sorteo Oficial</span>
+                        <span class="text-[8px] font-mono font-bold bg-indigo-100 text-indigo-800 px-1 py-0.2 rounded">${drawInfo.drawCode || 'CERT'}</span>
+                      </div>
+                      <div class="text-xs font-black text-slate-900 truncate">${drawInfo.gameTitle || game.title}</div>
+                      <p class="text-[10px] text-slate-500 truncate mt-0.5"><i class="fa-solid fa-user-check text-[9px] text-brand-600"></i> Por: <strong>${drawInfo.drawnByName || 'Organizador'}</strong></p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button onclick="app.shareSessionDrawToWhatsapp('${session.id}')" title="Compartir certificado en WhatsApp" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-[11px] rounded-xl shadow-xs flex items-center gap-1 transition-colors">
+                      <i class="fa-brands fa-whatsapp text-xs"></i>
+                      <span>Certificado</span>
+                    </button>
+                    <button onclick="app.openSessionDrawModal('${session.id}')" title="Ver detalles del sorteo" class="w-7 h-7 rounded-lg bg-indigo-100 hover:bg-indigo-200 text-indigo-800 flex items-center justify-center text-xs transition-colors">
+                      <i class="fa-solid fa-eye text-[10px]"></i>
+                    </button>
+                  </div>
+                </div>
+              `;
+            })() : (!session.winnerId && !isStartedOrPast) ? `
+              <div class="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl">
+                <div class="flex items-center gap-2 min-w-0">
+                  <i class="fa-solid fa-dice-d20 text-brand-600 text-sm shrink-0"></i>
+                  <span class="text-[11px] font-bold text-slate-700 truncate">¿Aún no deciden el juego?</span>
+                </div>
+                <button onclick="app.openSessionDrawModal('${session.id}')" class="px-2.5 py-1 bg-brand-600 active:bg-brand-700 text-white text-[10px] font-black rounded-lg shadow-2xs flex items-center gap-1 shrink-0 transition-all active:scale-95">
+                  <i class="fa-solid fa-lock text-[9px]"></i>
+                  <span>Sorteo a Distancia</span>
+                </button>
+              </div>
+            ` : ''}
+
             <!-- Winner Showcase Banner (if winner recorded) -->
             ${session.winnerId ? `
               <div class="p-3 rounded-2xl bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50 border border-amber-200 shadow-2xs flex items-center justify-between gap-2">
@@ -2946,6 +3179,15 @@ const app = {
     const sessions = db.getSessions();
     const session = sessions.find(s => s.id === sessionId);
     if (!session) return;
+
+    const friends = db.getFriends();
+    const me = friends.find(f => f.id === this.currentUserId);
+    const isAdmin = me && (me.role === 'admin' || me.id === 'u1');
+    const isCreator = session.attendees && session.attendees[0] && session.attendees[0].friendId === this.currentUserId;
+    if (!isAdmin && !isCreator) {
+      alert('Solo el organizador de la partida o el administrador tienen permiso para eliminarla.');
+      return;
+    }
 
     const games = db.getGames();
     const game = games.find(g => g.id === session.gameId);
@@ -3313,6 +3555,7 @@ const app = {
       const coverHtml = this.getGameCoverHtml(game, 'card');
       const descSnippet = game.description || 'Sin reseña registrada. Toca modificar para agregar una.';
       const timesPlayed = sessions.filter(s => s.gameId === game.id && (s.winnerId || ((s.date || '').split('T')[0] < todayStr))).length;
+      const canEdit = this.canEditGame(game);
 
       return `
         <div class="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex gap-3.5 hover:shadow-sm transition-all">
@@ -3356,12 +3599,14 @@ const app = {
 
               <!-- Quick Action Buttons -->
               <div class="flex items-center gap-1.5">
+                ${canEdit ? `
                 <button onclick="app.editGame('${game.id}')" title="Modificar / Editar juego" class="w-7 h-7 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 hover:text-brand-600 flex items-center justify-center text-xs transition-colors">
                   <i class="fa-solid fa-pen"></i>
                 </button>
                 <button onclick="app.deleteGame('${game.id}')" title="Eliminar juego" class="w-7 h-7 rounded-lg bg-slate-100 active:bg-rose-100 text-slate-400 hover:text-rose-600 flex items-center justify-center text-xs transition-colors">
                   <i class="fa-solid fa-trash-can"></i>
                 </button>
+                ` : ''}
                 <button onclick="app.quickScheduleGame('${game.id}')" title="Programar partida" class="px-2.5 py-1 rounded-lg bg-brand-50 active:bg-brand-100 text-brand-700 font-bold text-xs flex items-center gap-1 transition-colors">
                   <i class="fa-solid fa-calendar-plus text-[10px]"></i>
                   <span>Jugar</span>
@@ -3740,6 +3985,13 @@ const app = {
     const friend = friends.find(f => f.id === friendId);
     if (!friend) return;
 
+    const me = friends.find(f => f.id === this.currentUserId);
+    const isAdmin = me && (me.role === 'admin' || me.id === 'u1');
+    if (!isAdmin && this.currentUserId !== friendId) {
+      alert('Solo el administrador o el propio usuario pueden eliminar este perfil.');
+      return;
+    }
+
     if (!confirm(`¿Estás seguro de que deseas eliminar a "${friend.name}" del club?`)) {
       return;
     }
@@ -3763,6 +4015,632 @@ const app = {
     this.renderFriends();
     this.renderGames();
     this.renderSessions();
+  },
+
+  /* ======================================================== */
+  /* RULETA DE LA SUERTE EN VIVO (EN LA MESA) */
+  /* ======================================================== */
+  rouletteFilter: '',
+  rouletteCandidates: [],
+  rouletteAngle: 0,
+  isRouletteSpinning: false,
+
+  openRouletteModal() {
+    this.setRouletteFilter('');
+    const resBox = document.getElementById('roulette-result-box');
+    if (resBox) {
+      resBox.classList.add('hidden');
+      resBox.innerHTML = '';
+    }
+    const spinBtn = document.getElementById('btn-spin-wheel');
+    if (spinBtn) {
+      spinBtn.disabled = false;
+      const lbl = document.getElementById('btn-spin-label');
+      if (lbl) lbl.textContent = '¡Girar Ruleta de la Suerte!';
+    }
+    this.openModal('modal-roulette');
+    setTimeout(() => this.drawRouletteWheel(), 50);
+  },
+
+  setRouletteFilter(val) {
+    this.rouletteFilter = val;
+    document.querySelectorAll('.rf-chip').forEach(btn => {
+      btn.className = 'rf-chip px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-700';
+    });
+    const active = document.getElementById(val ? `rf-${val}` : 'rf-all');
+    if (active) {
+      active.className = 'rf-chip px-2.5 py-1 rounded-xl text-xs font-bold bg-brand-600 text-white shadow-xs';
+    }
+
+    const games = db.getGames();
+    this.rouletteCandidates = games.filter(g => {
+      if (!val) return true;
+      if (val === '2') return g.minPlayers <= 2 && g.maxPlayers >= 2;
+      if (val === '3') return g.minPlayers <= 3 && g.maxPlayers >= 3;
+      if (val === '4') return g.minPlayers <= 4 && g.maxPlayers >= 4;
+      if (val === '5') return g.maxPlayers >= 5;
+      return true;
+    });
+
+    const countEl = document.getElementById('roulette-games-count');
+    if (countEl) {
+      countEl.textContent = `${this.rouletteCandidates.length} juego${this.rouletteCandidates.length !== 1 ? 's' : ''}`;
+    }
+
+    this.drawRouletteWheel();
+  },
+
+  drawRouletteWheel() {
+    const canvas = document.getElementById('roulette-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = width / 2 - 4;
+
+    ctx.clearRect(0, 0, width, height);
+
+    const candidates = this.rouletteCandidates;
+    if (!candidates || candidates.length === 0) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+      ctx.fillStyle = '#1e293b';
+      ctx.fill();
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Sin juegos disponibles', cx, cy);
+      return;
+    }
+
+    const numSlices = candidates.length;
+    const sliceAngle = (2 * Math.PI) / numSlices;
+    const colors = [
+      '#6366f1', '#ec4899', '#10b981', '#f59e0b',
+      '#8b5cf6', '#06b6d4', '#f97316', '#3b82f6',
+      '#14b8a6', '#e11d48', '#84cc16', '#a855f7'
+    ];
+
+    for (let i = 0; i < numSlices; i++) {
+      const startAngle = this.rouletteAngle + i * sliceAngle;
+      const endAngle = startAngle + sliceAngle;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.fill();
+
+      // Border between slices
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#ffffff40';
+      ctx.stroke();
+
+      // Text label
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(startAngle + sliceAngle / 2);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = 3;
+      ctx.font = 'bold 10px system-ui, sans-serif';
+
+      let title = candidates[i].title || 'Juego';
+      if (title.length > 15) title = title.substring(0, 14) + '…';
+      ctx.fillText(title, radius - 14, 0);
+      ctx.restore();
+    }
+
+    // Outer border ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#ffffff60';
+    ctx.stroke();
+  },
+
+  spinRoulette() {
+    if (this.isRouletteSpinning) return;
+    if (!this.rouletteCandidates || this.rouletteCandidates.length === 0) {
+      alert('No hay juegos disponibles para la cantidad de jugadores seleccionada.');
+      return;
+    }
+
+    this.isRouletteSpinning = true;
+    const spinBtn = document.getElementById('btn-spin-wheel');
+    if (spinBtn) spinBtn.disabled = true;
+    const lbl = document.getElementById('btn-spin-label');
+    if (lbl) lbl.textContent = '¡Girando la suerte! 🎲';
+
+    const resBox = document.getElementById('roulette-result-box');
+    if (resBox) resBox.classList.add('hidden');
+
+    const candidates = this.rouletteCandidates;
+    const numSlices = candidates.length;
+    const sliceAngle = (2 * Math.PI) / numSlices;
+
+    const winnerIndex = Math.floor(Math.random() * numSlices);
+    const winnerGame = candidates[winnerIndex];
+
+    // Pointer is at the top: angle -Math.PI / 2.
+    // Center of slice i is at (angle + i * sliceAngle + sliceAngle / 2).
+    const targetSliceCenter = -Math.PI / 2 - (winnerIndex * sliceAngle + sliceAngle / 2);
+    const fullSpins = (5 + Math.floor(Math.random() * 3)) * (2 * Math.PI);
+    
+    // Normalize current angle
+    const currentNorm = this.rouletteAngle % (2 * Math.PI);
+    const delta = (targetSliceCenter - currentNorm) + fullSpins;
+    const startAngle = this.rouletteAngle;
+    const endAngle = startAngle + delta;
+
+    const duration = 3800;
+    const startTime = performance.now();
+    let lastVibeAngle = startAngle;
+
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Ease out cubic
+      const ease = 1 - Math.pow(1 - progress, 3);
+      this.rouletteAngle = startAngle + (endAngle - startAngle) * ease;
+      this.drawRouletteWheel();
+
+      // Subtle haptic tick when passing a slice
+      if (Math.abs(this.rouletteAngle - lastVibeAngle) >= sliceAngle) {
+        lastVibeAngle = this.rouletteAngle;
+        if (navigator.vibrate) navigator.vibrate(8);
+      }
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        this.isRouletteSpinning = false;
+        if (spinBtn) spinBtn.disabled = false;
+        if (lbl) lbl.textContent = '¡Girar de nuevo!';
+        this.finishRouletteSpin(winnerGame);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  },
+
+  finishRouletteSpin(winnerGame) {
+    if (navigator.vibrate) navigator.vibrate([40, 60, 40, 100]);
+    const resBox = document.getElementById('roulette-result-box');
+    if (!resBox) return;
+
+    const coverUrl = getSafeImageUrl(winnerGame.image);
+    resBox.innerHTML = `
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-14 rounded-xl overflow-hidden bg-slate-900 shrink-0 shadow-xs border border-amber-300">
+          ${coverUrl ? `<img src="${coverUrl}" alt="${winnerGame.title}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-amber-500"><i class="fa-solid fa-dice-d20"></i></div>`}
+        </div>
+        <div class="min-w-0 flex-1 text-left">
+          <span class="text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">🎉 ¡Juego Elegido!</span>
+          <h4 class="font-black text-sm text-slate-900 truncate mt-0.5">${winnerGame.title}</h4>
+          <p class="text-[10px] text-slate-600 font-medium">${winnerGame.minPlayers}-${winnerGame.maxPlayers} jug. • ~${winnerGame.durationMin} min</p>
+        </div>
+      </div>
+      <div class="pt-1">
+        <button onclick="app.quickScheduleFromDetail('${winnerGame.id}'); app.closeModal('modal-roulette');" class="w-full py-2 bg-brand-600 active:bg-brand-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all">
+          <i class="fa-solid fa-calendar-plus text-[11px]"></i>
+          <span>Programar Partida con este Juego</span>
+        </button>
+      </div>
+    `;
+    resBox.classList.remove('hidden');
+  },
+
+  /* ======================================================== */
+  /* SELECTOR DE PRIMER TURNO ("¿QUIÉN EMPIEZA?") */
+  /* ======================================================== */
+  fpTouches: new Map(),
+  fpCountdownTimer: null,
+  fpCountdownSecs: 3,
+  fpWinnerTouchId: null,
+  fpColors: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'],
+
+  openFirstPlayerModal() {
+    this.setFirstPlayerMode('touch');
+    this.openModal('modal-first-player');
+    this.initTouchZone();
+  },
+
+  setFirstPlayerMode(mode) {
+    const tabTouch = document.getElementById('tab-fp-touch');
+    const tabFriends = document.getElementById('tab-fp-friends');
+    const panelTouch = document.getElementById('fp-panel-touch');
+    const panelFriends = document.getElementById('fp-panel-friends');
+
+    if (mode === 'touch') {
+      if (tabTouch) tabTouch.className = 'py-2 rounded-xl font-black bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1 transition-all';
+      if (tabFriends) tabFriends.className = 'py-2 rounded-xl text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1 transition-all';
+      if (panelTouch) panelTouch.classList.remove('hidden');
+      if (panelFriends) panelFriends.classList.add('hidden');
+    } else {
+      if (tabTouch) tabTouch.className = 'py-2 rounded-xl text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1 transition-all';
+      if (tabFriends) tabFriends.className = 'py-2 rounded-xl font-black bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1 transition-all';
+      if (panelTouch) panelTouch.classList.add('hidden');
+      if (panelFriends) panelFriends.classList.remove('hidden');
+      this.populateFirstPlayerFriends();
+    }
+  },
+
+  initTouchZone() {
+    const zone = document.getElementById('fp-touch-zone');
+    if (!zone || zone.dataset.initialized) return;
+    zone.dataset.initialized = 'true';
+
+    const handleTouches = (e) => {
+      e.preventDefault();
+      const rect = zone.getBoundingClientRect();
+      const activeTouches = e.touches;
+
+      // Reset winner state if fingers change
+      if (this.fpWinnerTouchId && activeTouches.length === 0) {
+        this.fpWinnerTouchId = null;
+      }
+
+      // Clear non-active touches
+      const activeIds = new Set();
+      for (let i = 0; i < activeTouches.length; i++) {
+        activeIds.add(activeTouches[i].identifier);
+      }
+      for (const [id] of this.fpTouches) {
+        if (!activeIds.has(id)) {
+          this.fpTouches.delete(id);
+        }
+      }
+
+      // Add or update touches
+      for (let i = 0; i < activeTouches.length; i++) {
+        const touch = activeTouches[i];
+        const id = touch.identifier;
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+
+        if (!this.fpTouches.has(id)) {
+          const colorIdx = this.fpTouches.size % this.fpColors.length;
+          this.fpTouches.set(id, { x, y, color: this.fpColors[colorIdx] });
+        } else {
+          const obj = this.fpTouches.get(id);
+          obj.x = x;
+          obj.y = y;
+        }
+      }
+
+      this.renderTouchCircles();
+
+      // Countdown handling: start if >= 2 fingers placed and no winner yet
+      if (this.fpTouches.size >= 2 && !this.fpWinnerTouchId) {
+        if (!this.fpCountdownTimer) {
+          if (navigator.vibrate) navigator.vibrate(30);
+          this.startTouchCountdown();
+        }
+      } else {
+        if (this.fpCountdownTimer) {
+          clearInterval(this.fpCountdownTimer);
+          this.fpCountdownTimer = null;
+          const overlay = document.getElementById('fp-countdown-overlay');
+          if (overlay) overlay.remove();
+        }
+      }
+    };
+
+    zone.addEventListener('touchstart', handleTouches, { passive: false });
+    zone.addEventListener('touchmove', handleTouches, { passive: false });
+    zone.addEventListener('touchend', handleTouches, { passive: false });
+    zone.addEventListener('touchcancel', handleTouches, { passive: false });
+  },
+
+  renderTouchCircles() {
+    const zone = document.getElementById('fp-touch-zone');
+    const hint = document.getElementById('fp-touch-hint');
+    if (!zone) return;
+
+    // Remove existing touch circle elements
+    zone.querySelectorAll('.fp-circle').forEach(el => el.remove());
+
+    if (this.fpTouches.size === 0) {
+      if (hint) hint.classList.remove('hidden');
+      return;
+    }
+
+    if (hint) hint.classList.add('hidden');
+
+    for (const [id, t] of this.fpTouches) {
+      const isWinner = this.fpWinnerTouchId === id;
+      const isLoser = this.fpWinnerTouchId && !isWinner;
+
+      const circle = document.createElement('div');
+      circle.className = `fp-circle absolute rounded-full flex items-center justify-center transition-all pointer-events-none select-none ${
+        isWinner 
+          ? 'w-20 h-20 -ml-10 -mt-10 ring-4 ring-amber-300 shadow-2xl scale-110 z-30' 
+          : isLoser 
+            ? 'w-14 h-14 -ml-7 -mt-7 opacity-20' 
+            : 'w-16 h-16 -ml-8 -mt-8 ring-2 ring-white/60 animate-pulse shadow-lg'
+      }`;
+      circle.style.left = `${t.x}px`;
+      circle.style.top = `${t.y}px`;
+      circle.style.backgroundColor = isWinner ? '#f59e0b' : t.color;
+
+      if (isWinner) {
+        circle.innerHTML = '<span class="text-2xl text-white drop-shadow">👑</span>';
+      } else {
+        circle.innerHTML = '<span class="w-3 h-3 rounded-full bg-white/70"></span>';
+      }
+
+      zone.appendChild(circle);
+    }
+  },
+
+  startTouchCountdown() {
+    this.fpCountdownSecs = 2.5;
+    const zone = document.getElementById('fp-touch-zone');
+
+    const countdownOverlay = document.createElement('div');
+    countdownOverlay.id = 'fp-countdown-overlay';
+    countdownOverlay.className = 'absolute inset-0 flex items-center justify-center pointer-events-none text-white font-black text-3xl z-40 bg-black/20 backdrop-blur-2xs';
+    countdownOverlay.textContent = '¡Listos!...';
+    zone.appendChild(countdownOverlay);
+
+    let step = 0;
+    this.fpCountdownTimer = setInterval(() => {
+      step++;
+      if (navigator.vibrate) navigator.vibrate(15);
+
+      if (step === 1) countdownOverlay.textContent = '3...';
+      else if (step === 2) countdownOverlay.textContent = '2...';
+      else if (step === 3) countdownOverlay.textContent = '1...';
+      else if (step >= 4) {
+        clearInterval(this.fpCountdownTimer);
+        this.fpCountdownTimer = null;
+        countdownOverlay.remove();
+        this.selectTouchWinner();
+      }
+    }, 450);
+  },
+
+  selectTouchWinner() {
+    const ids = Array.from(this.fpTouches.keys());
+    if (ids.length === 0) return;
+    const randomId = ids[Math.floor(Math.random() * ids.length)];
+    this.fpWinnerTouchId = randomId;
+    this.renderTouchCircles();
+
+    if (navigator.vibrate) navigator.vibrate([80, 50, 150]);
+  },
+
+  populateFirstPlayerFriends() {
+    const container = document.getElementById('fp-friends-list');
+    if (!container) return;
+    const friends = db.getFriends();
+
+    container.innerHTML = friends.map(f => `
+      <label class="p-2.5 rounded-2xl border border-slate-200 bg-white hover:border-brand-300 cursor-pointer flex items-center gap-2 transition-all">
+        <input type="checkbox" name="fp-friend-check" value="${f.id}" checked class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+        <div class="w-6 h-6 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
+          ${getMeepleSvg(f.color, 16)}
+        </div>
+        <span class="font-bold text-xs text-slate-800 truncate">${f.name}</span>
+      </label>
+    `).join('');
+  },
+
+  spinFirstPlayerFriends() {
+    const checked = Array.from(document.querySelectorAll('input[name="fp-friend-check"]:checked')).map(el => el.value);
+    if (checked.length === 0) {
+      alert('Por favor selecciona al menos a 1 amigo para el sorteo.');
+      return;
+    }
+
+    const friends = db.getFriends().filter(f => checked.includes(f.id));
+    const resBox = document.getElementById('fp-friends-result');
+    if (!resBox) return;
+
+    resBox.classList.remove('hidden');
+    let counter = 0;
+    const interval = setInterval(() => {
+      const temp = friends[counter % friends.length];
+      resBox.innerHTML = `
+        <div class="font-bold text-xs text-slate-500">Mezclando Meeples...</div>
+        <div class="flex items-center justify-center gap-1.5 text-sm font-black text-slate-800">
+          ${getMeepleSvg(temp.color, 18)}
+          <span>${temp.name}</span>
+        </div>
+      `;
+      counter++;
+      if (navigator.vibrate) navigator.vibrate(10);
+    }, 100);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      const winner = friends[Math.floor(Math.random() * friends.length)];
+      if (navigator.vibrate) navigator.vibrate([60, 60, 100]);
+
+      resBox.innerHTML = `
+        <div class="text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-100 py-0.5 px-2 rounded-full inline-block">👑 ¡Primer Jugador (Turno 1)!</div>
+        <div class="flex items-center justify-center gap-2 text-base font-black text-amber-950 mt-1">
+          ${getMeepleSvg(winner.color, 24)}
+          <span>${winner.name}</span>
+        </div>
+        <p class="text-[10px] text-amber-800 font-medium">Comienza la ronda con el primer turno.</p>
+      `;
+    }, 1500);
+  },
+
+  /* ======================================================== */
+  /* SORTEO OFICIAL A DISTANCIA Y CERTIFICADO */
+  /* ======================================================== */
+  currentDrawSessionId: null,
+
+  openSessionDrawModal(sessionId) {
+    this.currentDrawSessionId = sessionId;
+    const sessions = db.getSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const games = db.getGames();
+    const game = games.find(g => g.id === session.gameId);
+
+    const infoBox = document.getElementById('session-draw-info');
+    if (infoBox) {
+      let cleanTime = session.time || '19:30';
+      if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
+      infoBox.innerHTML = `
+        <div class="font-black text-slate-900 text-xs">Partida Programada:</div>
+        <div class="text-[11px] text-slate-600 font-medium">📅 ${session.date} a las ${cleanTime} hrs • 📍 ${session.location || 'Club'}</div>
+        <div class="text-[11px] text-brand-700 font-bold mt-0.5">🎮 Juego actual registrado: ${game ? game.title : 'Por definir'}</div>
+      `;
+    }
+
+    const resBox = document.getElementById('session-draw-result-box');
+    const btnDraw = document.getElementById('btn-execute-session-draw');
+
+    if (session.drawData) {
+      let drawInfo = null;
+      try { drawInfo = typeof session.drawData === 'string' ? JSON.parse(session.drawData) : session.drawData; } catch(e){}
+      if (drawInfo && resBox) {
+        const drawnDate = drawInfo.drawnAt ? new Date(drawInfo.drawnAt).toLocaleString('es-ES') : 'Fecha registrada';
+        resBox.innerHTML = `
+          <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto text-lg mb-1 shadow-xs">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <span class="text-[9px] font-black uppercase text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">Sorteo Oficial Certificado</span>
+          <h4 class="font-black text-base text-slate-900 mt-1">${drawInfo.gameTitle || (game ? game.title : 'Juego')}</h4>
+          <div class="p-2 bg-white/80 rounded-xl border border-indigo-100 text-[10px] text-slate-600 text-left space-y-0.5 my-1">
+            <div><strong class="text-slate-800">Certificado por:</strong> ${drawInfo.drawnByName}</div>
+            <div><strong class="text-slate-800">Fecha y Hora:</strong> ${drawnDate}</div>
+            <div><strong class="text-slate-800">Código de Validación:</strong> <code class="font-mono font-bold text-brand-600">${drawInfo.drawCode}</code></div>
+          </div>
+          <button type="button" onclick="app.shareSessionDrawToWhatsapp('${session.id}')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-colors">
+            <i class="fa-brands fa-whatsapp text-sm"></i>
+            <span>Compartir Certificado en WhatsApp</span>
+          </button>
+        `;
+        resBox.classList.remove('hidden');
+      }
+      if (btnDraw) {
+        btnDraw.disabled = true;
+        btnDraw.innerHTML = '<i class="fa-solid fa-lock"></i><span>Sorteo Ya Certificado e Inalterable</span>';
+      }
+    } else {
+      if (resBox) resBox.classList.add('hidden');
+      if (btnDraw) {
+        btnDraw.disabled = false;
+        btnDraw.innerHTML = '<i class="fa-solid fa-lock"></i><span>Sortear y Certificar Oficialmente 🎲</span>';
+      }
+    }
+
+    this.openModal('modal-session-draw');
+  },
+
+  executeOfficialSessionDraw() {
+    const sessionId = this.currentDrawSessionId;
+    if (!sessionId) return;
+
+    const sessions = db.getSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    if (session.drawData) {
+      alert('Esta partida ya cuenta con un sorteo oficial certificado e inalterable.');
+      return;
+    }
+
+    const friends = db.getFriends();
+    const currentFriend = friends.find(f => f.id === this.currentUserId);
+    if (!currentFriend) {
+      alert('Por favor selecciona tu perfil o ingresa con tu PIN para realizar el sorteo oficial.');
+      this.openUserGate(true);
+      return;
+    }
+
+    const games = db.getGames();
+    if (games.length === 0) {
+      alert('No hay juegos disponibles en la ludoteca para sortear.');
+      return;
+    }
+
+    if (!confirm(`¿Confirmas que deseas realizar el Sorteo Oficial a Distancia?\n\nTu nombre (${currentFriend.name}) y la fecha/hora exacta quedarán sellados en Google Sheets como respaldo inalterable para todos los amigos.`)) {
+      return;
+    }
+
+    // Filter candidate games matching confirmed attendees or general
+    const attendees = Array.isArray(session.attendees) ? session.attendees.filter(a => a.status === 'yes') : [];
+    const count = attendees.length > 0 ? attendees.length : 4;
+    let pool = games.filter(g => g.minPlayers <= count && g.maxPlayers >= count);
+    if (pool.length === 0) pool = games;
+
+    const winnerGame = pool[Math.floor(Math.random() * pool.length)];
+    const drawCode = 'CERT-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    const drawData = {
+      gameId: winnerGame.id,
+      gameTitle: winnerGame.title,
+      drawnAt: new Date().toISOString(),
+      drawnByUserId: currentFriend.id,
+      drawnByName: currentFriend.name,
+      drawCode
+    };
+
+    session.gameId = winnerGame.id;
+    session.drawData = JSON.stringify(drawData);
+
+    db.saveSessions(sessions);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
+
+    this.renderSessions();
+    this.openSessionDrawModal(sessionId);
+
+    if (navigator.vibrate) navigator.vibrate([60, 60, 100]);
+
+    if (confirm(`¡Sorteo Oficial Exitoso!\n\nJuego seleccionado: ${winnerGame.title}\nCódigo: ${drawCode}\n\n¿Deseas enviar el certificado a WhatsApp ahora?`)) {
+      this.shareSessionDrawToWhatsapp(sessionId);
+    }
+  },
+
+  shareSessionDrawToWhatsapp(sessionId) {
+    const session = db.getSessions().find(s => s.id === sessionId);
+    if (!session || !session.drawData) return;
+
+    let drawInfo = null;
+    try { drawInfo = typeof session.drawData === 'string' ? JSON.parse(session.drawData) : session.drawData; } catch(e){}
+    if (!drawInfo) return;
+
+    const games = db.getGames();
+    const game = games.find(g => g.id === session.gameId) || { title: drawInfo.gameTitle || 'Juego de mesa', minPlayers: 2, maxPlayers: 4, durationMin: 60 };
+    const shareUrl = this.getShareUrl();
+
+    let cleanTime = session.time || '19:30';
+    if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
+
+    const drawTime = drawInfo.drawnAt ? new Date(drawInfo.drawnAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+    const drawDate = drawInfo.drawnAt ? new Date(drawInfo.drawnAt).toLocaleDateString('es-ES') : '';
+
+    let msg = `🎲📜 *CERTIFICADO DE SORTEO OFICIAL - CLUB DE JUEGOS* 📜🎲%0A%0A` +
+      `¡La suerte ha hablado! El juego seleccionado para la partida es:%0A%0A` +
+      `🔥 *JUEGO SORTEADO:* *${game.title}*%0A` +
+      `👥 *Jugadores:* ${game.minPlayers}-${game.maxPlayers} jug. (~${game.durationMin} min)%0A` +
+      `📅 *Fecha de la Partida:* ${session.date} a las ${cleanTime} hrs%0A` +
+      `📍 *Lugar:* ${session.location || 'Club'}%0A%0A` +
+      `🛡️ *CERTIFICACIÓN INALTERABLE:*%0A` +
+      `👤 *Sorteado por:* ${drawInfo.drawnByName}%0A` +
+      `⏰ *Sellado el:* ${drawDate} ${drawTime} hrs%0A` +
+      `🔒 *Código de Validación:* \`${drawInfo.drawCode}\`%0A` +
+      `📋 *Registrado en Base de Datos Google Sheets*%0A%0A` +
+      `📲 *Revisa la ficha del juego y confirma tu asistencia:*%0A${encodeURIComponent(shareUrl)}`;
+
+    window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
   }
 };
 

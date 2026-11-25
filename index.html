@@ -129,34 +129,48 @@
         </button>
       </div>
 
-      <!-- PANEL 1: INICIAR SESIÓN (Desglosar y elegir perfil existente) -->
+      <!-- PANEL 1: INICIAR SESIÓN (Elegir perfil y escribir Clave PIN de 4 dígitos) -->
       <div id="gate-panel-login" class="space-y-3.5">
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1.5">¿Quién está jugando hoy?:</label>
-          <select id="gate-user-select" onchange="app.handleGateUserSelectChange()" class="w-full border-2 border-brand-200 focus:border-brand-500 rounded-xl p-3 text-xs bg-slate-50 font-bold text-slate-800 focus:outline-none transition-colors">
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Selecciona tu perfil:</label>
+          <select id="gate-user-select" onchange="app.handleGateUserSelectChange()" class="w-full border-2 border-brand-200 focus:border-brand-500 rounded-xl p-2.5 text-xs bg-slate-50 font-bold text-slate-800 focus:outline-none transition-colors">
             <!-- Dynamically populated -->
           </select>
         </div>
 
         <!-- Preview del perfil seleccionado -->
-        <div id="gate-existing-preview" class="p-3 bg-brand-50/80 rounded-2xl border border-brand-200 flex items-center gap-3">
-          <div id="gate-preview-meeple" class="w-10 h-10 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex items-center justify-center shrink-0"></div>
+        <div id="gate-existing-preview" class="p-2.5 bg-brand-50/80 rounded-2xl border border-brand-200 flex items-center gap-3">
+          <div id="gate-preview-meeple" class="w-9 h-9 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex items-center justify-center shrink-0"></div>
           <div class="min-w-0 flex-1">
             <span class="text-[10px] font-bold text-brand-700 uppercase tracking-wider block">Perfil Listo</span>
-            <span id="gate-preview-name" class="font-extrabold text-sm text-slate-900 truncate block">...</span>
+            <span id="gate-preview-name" class="font-extrabold text-xs text-slate-900 truncate block">...</span>
           </div>
         </div>
 
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-bold text-slate-700">Clave PIN Secreta (4 dígitos):</label>
+            <span class="text-[10px] text-slate-400">PIN inicial: <strong class="font-mono text-brand-600">1234</strong></span>
+          </div>
+          <input type="password" id="gate-login-pin" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="••••" class="w-full border-2 border-brand-200 focus:border-brand-500 rounded-xl p-2.5 text-center text-lg font-black tracking-widest bg-white focus:outline-none">
+        </div>
+
         <button type="button" onclick="app.submitGateLogin()" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]">
-          <span>Iniciar Sesión 🎲</span>
+          <span>Ingresar al Club 🎲</span>
         </button>
+        <p class="text-[10px] text-slate-400 text-center font-medium">🔒 Tu teléfono recordará tu sesión para no pedirte el PIN cada vez.</p>
       </div>
 
-      <!-- PANEL 2: REGISTRARSE (Crear jugador con Meeple único) -->
-      <div id="gate-panel-register" class="space-y-3.5 hidden">
+      <!-- PANEL 2: REGISTRARSE (Crear jugador con Celular, Meeple único y Clave PIN) -->
+      <div id="gate-panel-register" class="space-y-3 hidden">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Nombre o Apodo:</label>
-          <input type="text" id="gate-new-name" placeholder="Ej. Rodrigo, Camila..." class="w-full border-2 border-slate-200 focus:border-brand-500 rounded-xl px-3.5 py-2.5 text-xs bg-white font-bold focus:outline-none">
+          <input type="text" id="gate-new-name" placeholder="Ej. Rodrigo, Camila..." class="w-full border-2 border-slate-200 focus:border-brand-500 rounded-xl px-3 py-2 text-xs bg-white font-bold focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Número de Celular (WhatsApp):</label>
+          <input type="tel" id="gate-new-phone" placeholder="Ej. 987654321" inputmode="numeric" class="w-full border-2 border-slate-200 focus:border-brand-500 rounded-xl px-3 py-2 text-xs bg-white font-bold focus:outline-none">
         </div>
 
         <div>
@@ -164,14 +178,25 @@
             <label class="text-xs font-bold text-slate-700">Elige tu Meeple:</label>
             <span class="text-[9px] text-brand-700 font-bold bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">Sin repetir color</span>
           </div>
-          <div id="gate-new-meeple-palette" class="grid grid-cols-4 gap-1.5 py-1">
+          <div id="gate-new-meeple-palette" class="grid grid-cols-4 gap-1.5 py-0.5">
             <!-- Dynamically populated with meeples, taken colors disabled -->
           </div>
           <input type="hidden" id="gate-selected-meeple-color" value="">
         </div>
 
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">PIN (4 dígitos):</label>
+            <input type="password" id="gate-new-pin" maxlength="4" placeholder="••••" inputmode="numeric" pattern="[0-9]*" class="w-full border-2 border-slate-200 focus:border-brand-500 rounded-xl px-2 py-2 text-center text-sm font-black tracking-widest bg-white focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Confirmar PIN:</label>
+            <input type="password" id="gate-new-pin-confirm" maxlength="4" placeholder="••••" inputmode="numeric" pattern="[0-9]*" class="w-full border-2 border-slate-200 focus:border-brand-500 rounded-xl px-2 py-2 text-center text-sm font-black tracking-widest bg-white focus:outline-none">
+          </div>
+        </div>
+
         <button type="button" onclick="app.submitGateRegister()" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]">
-          <span>Registrar y Entrar 🚀</span>
+          <span>Crear Cuenta y Entrar 🚀</span>
         </button>
       </div>
 
@@ -237,10 +262,10 @@
           </button>
 
           <!-- Current User Profile Pill -->
-          <button onclick="app.openUserGate(true)" class="flex items-center gap-1.5 py-1 px-2.5 rounded-full bg-slate-100 hover:bg-brand-50 active:bg-brand-100 transition-colors border border-slate-200/80 shadow-2xs" title="Cambiar de jugador">
+          <button onclick="app.openUserProfileModal()" class="flex items-center gap-1.5 py-1 px-2.5 rounded-full bg-slate-100 hover:bg-brand-50 active:bg-brand-100 transition-colors border border-slate-200/80 shadow-2xs" title="Mi Perfil">
             <div id="header-user-avatar" class="w-5 h-5 flex items-center justify-center shrink-0"></div>
             <span id="header-user-name" class="text-xs font-black text-slate-800 max-w-[75px] truncate">Elvis</span>
-            <span class="text-[9px] text-brand-600 font-bold bg-white px-1.5 py-0.2 rounded-md border border-brand-200 shrink-0">Cambiar</span>
+            <i class="fa-solid fa-chevron-down text-[8px] text-slate-400 shrink-0"></i>
           </button>
         </div>
       </div>
@@ -279,10 +304,14 @@
           <h2 class="text-xl sm:text-2xl font-black tracking-tight">¿Cuándo jugamos?</h2>
           <p class="text-brand-100 text-xs leading-relaxed max-w-sm">Revisa las partidas programadas y aparta tu cupo con un toque.</p>
         </div>
-        <div class="pt-3">
-          <button onclick="app.openModal('modal-session')" class="w-full sm:w-auto px-4 py-2.5 bg-white text-brand-700 font-bold text-xs rounded-xl shadow active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+        <div class="pt-3 flex flex-wrap items-center gap-2">
+          <button onclick="app.openModal('modal-session')" class="flex-1 sm:flex-none px-4 py-2.5 bg-white active:bg-slate-100 text-brand-700 font-bold text-xs rounded-xl shadow active:scale-[0.98] transition-all flex items-center justify-center gap-2">
             <i class="fa-solid fa-calendar-plus"></i>
-            <span>Organizar Nueva Partida</span>
+            <span>Organizar Partida</span>
+          </button>
+          <button onclick="app.openFirstPlayerModal()" class="flex-1 sm:flex-none px-3.5 py-2.5 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-md text-white font-bold text-xs rounded-xl shadow active:scale-[0.98] transition-all flex items-center justify-center gap-1.5" title="Decidir quién tiene el primer turno">
+            <i class="fa-solid fa-hand-pointer text-amber-300"></i>
+            <span>¿Quién empieza?</span>
           </button>
         </div>
       </div>
@@ -296,13 +325,17 @@
     <!-- TAB 2: LUDOTECA (CATÁLOGO DE JUEGOS) -->
     <section id="tab-games" class="space-y-4 hidden">
       
-      <!-- Header with Add Button & WhatsApp Poll -->
+      <!-- Header with Add Button & WhatsApp Poll & Ruleta -->
       <div class="flex items-center justify-between gap-2">
         <div>
           <h2 class="text-xl font-bold text-slate-900">Ludoteca</h2>
           <p class="text-xs text-slate-500">Juegos de todo el grupo</p>
         </div>
         <div class="flex items-center gap-1.5">
+          <button onclick="app.openRouletteModal()" title="Girar ruleta de la suerte" class="px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 active:from-amber-600 active:to-amber-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-colors">
+            <i class="fa-solid fa-dharmachakra"></i>
+            <span>Ruleta</span>
+          </button>
           <button onclick="app.shareGamePollToWhatsapp()" title="Generar encuesta para WhatsApp" class="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 flex items-center gap-1.5 shadow-2xs transition-colors">
             <i class="fa-brands fa-whatsapp text-emerald-600 text-sm"></i>
             <span class="hidden sm:inline">Encuesta</span>
@@ -745,6 +778,202 @@
     </div>
   </div>
 
-  <script src="app.js?v=33"></script>
+  <!-- ======================================================== -->
+  <!-- MOBILE BOTTOM SHEET MODAL: MI PERFIL Y SEGURIDAD -->
+  <!-- ======================================================== -->
+  <div id="modal-user-profile" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeModal('modal-user-profile')" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl sm:m-auto sm:max-w-sm w-full p-5 shadow-2xl animate-sheet space-y-4">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-user-shield text-brand-600"></i>
+          <span>Mi Perfil y Seguridad</span>
+        </h3>
+        <button onclick="app.closeModal('modal-user-profile')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <div id="user-profile-details" class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div class="space-y-2 pt-1 text-xs">
+        <button onclick="app.promptChangePin()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-bold rounded-xl border border-slate-200 flex items-center justify-center gap-2 transition-colors">
+          <i class="fa-solid fa-key text-brand-600"></i>
+          <span>Cambiar mi Clave PIN (4 dígitos)</span>
+        </button>
+
+        <button onclick="app.logoutUser()" class="w-full py-2.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 font-bold rounded-xl border border-rose-200 flex items-center justify-center gap-2 transition-colors">
+          <i class="fa-solid fa-arrow-right-from-bracket text-rose-600"></i>
+          <span>Cerrar Sesión en este Teléfono</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: RULETA DE LA SUERTE (EN VIVO / EN LA MESA) -->
+  <!-- ======================================================== -->
+  <div id="modal-roulette" class="fixed inset-0 bg-slate-900/75 backdrop-blur-md z-50 flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 hidden">
+    <div onclick="app.closeModal('modal-roulette')" class="flex-1 sm:hidden"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-5 shadow-2xl animate-sheet space-y-3.5 max-h-[92vh] overflow-y-auto no-scrollbar">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="font-black text-base text-slate-900 flex items-center gap-2">
+          <span class="text-amber-500"><i class="fa-solid fa-dharmachakra"></i></span>
+          <span>Ruleta de Juegos</span>
+        </h3>
+        <button onclick="app.closeModal('modal-roulette')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Filters: How many players at the table? -->
+      <div class="space-y-1 text-xs">
+        <div class="flex items-center justify-between text-[11px] font-bold text-slate-700">
+          <span>¿Cuántos juegan en la mesa?:</span>
+          <span id="roulette-games-count" class="text-brand-600 font-black">...</span>
+        </div>
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+          <button type="button" onclick="app.setRouletteFilter('')" id="rf-all" class="rf-chip px-2.5 py-1 rounded-xl text-xs font-bold bg-brand-600 text-white shadow-xs">Todos</button>
+          <button type="button" onclick="app.setRouletteFilter('2')" id="rf-2" class="rf-chip px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">2 jug.</button>
+          <button type="button" onclick="app.setRouletteFilter('3')" id="rf-3" class="rf-chip px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">3 jug.</button>
+          <button type="button" onclick="app.setRouletteFilter('4')" id="rf-4" class="rf-chip px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">4 jug.</button>
+          <button type="button" onclick="app.setRouletteFilter('5')" id="rf-5" class="rf-chip px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">5+ jug.</button>
+        </div>
+      </div>
+
+      <!-- Canvas Wheel Container -->
+      <div class="relative flex flex-col items-center justify-center my-1 select-none">
+        <!-- Pointer Arrow at top -->
+        <div class="absolute -top-3 z-20 text-rose-600 text-2xl drop-shadow-md">
+          <i class="fa-solid fa-caret-down"></i>
+        </div>
+        
+        <div class="w-[260px] h-[260px] rounded-full overflow-hidden p-1 bg-gradient-to-tr from-amber-400 via-purple-500 to-brand-600 shadow-xl relative flex items-center justify-center">
+          <canvas id="roulette-canvas" width="260" height="260" class="rounded-full bg-slate-900"></canvas>
+          <div class="absolute w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center text-brand-600 text-sm font-black z-10 border-2 border-slate-200">
+            <i class="fa-solid fa-dice-d20"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result Container (Appears after spin) -->
+      <div id="roulette-result-box" class="hidden p-3 bg-gradient-to-r from-amber-50 to-brand-50 border-2 border-amber-300 rounded-2xl shadow-xs space-y-2">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Spin Button -->
+      <button type="button" id="btn-spin-wheel" onclick="app.spinRoulette()" class="w-full py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 active:scale-95 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-all">
+        <i class="fa-solid fa-rotate text-amber-200"></i>
+        <span id="btn-spin-label">¡Girar Ruleta de la Suerte!</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: ¿QUIÉN EMPIEZA PRIMERO? (SELECTOR DE PRIMER TURNO) -->
+  <!-- ======================================================== -->
+  <div id="modal-first-player" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 hidden">
+    <div onclick="app.closeModal('modal-first-player')" class="flex-1 sm:hidden"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-5 shadow-2xl animate-sheet space-y-3.5 max-h-[92vh] overflow-y-auto no-scrollbar">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="font-black text-base text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-hand-pointer text-brand-600"></i>
+          <span>¿Quién empieza la partida?</span>
+        </h3>
+        <button onclick="app.closeModal('modal-first-player')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Segmented Mode: Dedos en Pantalla vs Sorteo de Amigos -->
+      <div class="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-2xl border border-slate-200 text-xs font-bold">
+        <button type="button" onclick="app.setFirstPlayerMode('touch')" id="tab-fp-touch" class="py-2 rounded-xl font-black bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1 transition-all">
+          <i class="fa-solid fa-fingerprint text-xs"></i> <span>Táctil (Dedos)</span>
+        </button>
+        <button type="button" onclick="app.setFirstPlayerMode('friends')" id="tab-fp-friends" class="py-2 rounded-xl text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1 transition-all">
+          <i class="fa-solid fa-dice text-xs"></i> <span>Meeples del Club</span>
+        </button>
+      </div>
+
+      <!-- PANEL 1: TÁCTIL EN PANTALLA (Multi-Touch Finger Picker Chwazi style) -->
+      <div id="fp-panel-touch" class="space-y-2">
+        <p class="text-[11px] text-slate-500 text-center font-medium">Cada jugador coloque un dedo en el recuadro negro y manténgalo:</p>
+        <div id="fp-touch-zone" class="w-full h-56 bg-slate-950 rounded-2xl relative overflow-hidden flex flex-col items-center justify-center text-center p-3 cursor-pointer select-none touch-none border-2 border-slate-800 shadow-inner">
+          <div id="fp-touch-hint" class="text-slate-400 space-y-1 pointer-events-none">
+            <i class="fa-solid fa-hand-pointer text-3xl animate-bounce text-brand-400"></i>
+            <div class="font-bold text-xs text-white">Pon tu dedo aquí</div>
+            <div class="text-[10px] text-slate-400">Admite de 2 a 6 dedos a la vez</div>
+          </div>
+          <!-- Touch circles rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- PANEL 2: SORTEO DE AMIGOS -->
+      <div id="fp-panel-friends" class="space-y-3 hidden">
+        <p class="text-[11px] text-slate-500 text-center font-medium">Selecciona quiénes están en la mesa y sortea el turno 1:</p>
+        <div id="fp-friends-list" class="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto no-scrollbar">
+          <!-- Rendered dynamically with checkboxes -->
+        </div>
+        <div id="fp-friends-result" class="hidden p-3 bg-amber-50 border border-amber-200 rounded-2xl text-center space-y-1"></div>
+        <button type="button" onclick="app.spinFirstPlayerFriends()" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2">
+          <i class="fa-solid fa-dice-d20"></i>
+          <span>¡Sortear Quién Empieza!</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: SORTEO OFICIAL A DISTANCIA (PARA PARTIDAS) -->
+  <!-- ======================================================== -->
+  <div id="modal-session-draw" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeModal('modal-session-draw')" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl sm:m-auto sm:max-w-md w-full p-5 shadow-2xl animate-sheet space-y-3.5 max-h-[90vh] overflow-y-auto no-scrollbar">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-dice-d20 text-brand-600"></i>
+          <span>Sorteo Oficial a Distancia</span>
+        </h3>
+        <button onclick="app.closeModal('modal-session-draw')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <div id="session-draw-info" class="p-3 bg-brand-50 rounded-2xl text-xs space-y-1">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div class="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 leading-snug flex items-start gap-2">
+        <i class="fa-solid fa-shield-halved text-amber-600 text-sm mt-0.5"></i>
+        <div>
+          <span class="font-black">Sorteo Transparente e Inalterable:</span> Al pulsar el botón, el sistema sorteará un juego al azar, guardará el resultado en la base de datos de Google Sheets con fecha, hora y responsable, y generará el certificado para WhatsApp.
+        </div>
+      </div>
+
+      <div id="session-draw-result-box" class="hidden p-3 bg-gradient-to-r from-amber-50 to-brand-50 border-2 border-amber-300 rounded-2xl text-center space-y-2">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div id="session-draw-actions" class="pt-1 space-y-2">
+        <input type="hidden" id="draw-target-session-id" value="">
+        <button type="button" id="btn-execute-session-draw" onclick="app.executeOfficialSessionDraw()" class="w-full py-3 bg-gradient-to-r from-brand-600 to-indigo-600 active:from-brand-700 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2">
+          <i class="fa-solid fa-lock"></i>
+          <span>Sortear y Certificar Oficialmente 🎲</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=34"></script>
 </body>
 </html>
