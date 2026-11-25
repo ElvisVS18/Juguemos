@@ -1693,6 +1693,30 @@ const app = {
     this.openModal('modal-user-profile');
   },
 
+  promptChangePhone() {
+    const friends = db.getFriends();
+    const current = friends.find(f => f.id === this.currentUserId);
+    if (!current) return;
+
+    const currentPhone = current.phone || '';
+    const newPhone = prompt('Ingresa tu número de celular para que tus amigos te contacten por WhatsApp:\n(Si eres de otro país, puedes incluir tu código de país con +, ej. +51 987654321, +54 9 11 ..., +34, etc.)', currentPhone);
+    if (newPhone === null) return;
+    const cleanPhone = newPhone.trim();
+    if (!cleanPhone || cleanPhone.length < 6) {
+      alert('Por favor ingresa un número de celular válido (mínimo 6 dígitos).');
+      return;
+    }
+
+    current.phone = cleanPhone;
+    db.saveFriends(friends);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
+
+    alert('¡Tu número de celular fue actualizado correctamente y sincronizado en Google Sheets!');
+    this.openUserProfileModal();
+  },
+
   promptChangePin() {
     const friends = db.getFriends();
     const current = friends.find(f => f.id === this.currentUserId);
@@ -3881,6 +3905,8 @@ const app = {
     if (form) form.reset();
     const idInput = document.getElementById('friend-id');
     if (idInput) idInput.value = '';
+    const phoneInput = document.getElementById('friend-phone');
+    if (phoneInput) phoneInput.value = '';
 
     const heading = document.getElementById('modal-friend-heading');
     if (heading) heading.textContent = 'Agregar Amigo al Club';
@@ -3905,6 +3931,8 @@ const app = {
 
     document.getElementById('friend-id').value = friend.id;
     document.getElementById('friend-name').value = friend.name;
+    const phoneInput = document.getElementById('friend-phone');
+    if (phoneInput) phoneInput.value = friend.phone || '';
     this.populateFriendColorSelect(friend.color, friend.id);
 
     const heading = document.getElementById('modal-friend-heading');
@@ -3926,6 +3954,7 @@ const app = {
     const id = document.getElementById('friend-id').value.trim();
     const name = document.getElementById('friend-name').value.trim();
     const color = document.getElementById('friend-color').value;
+    const phone = (document.getElementById('friend-phone')?.value || '').trim();
 
     if (!name) return;
 
@@ -3948,12 +3977,20 @@ const app = {
         friends[idx].name = name;
         friends[idx].color = color;
         friends[idx].initials = initials;
+        friends[idx].phone = phone;
       }
     } else {
       const newFriend = {
         id: 'u_' + Date.now(),
         name,
         color,
+        initials,
+        phone,
+        pin: '1234',
+        role: 'member'
+      };
+      friends.push(newFriend);
+    }
         initials
       };
       friends.push(newFriend);
