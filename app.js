@@ -3008,6 +3008,9 @@ const app = {
       const now = new Date();
       const isStartedOrPast = !isNaN(sessionDateTime.getTime()) ? (now >= sessionDateTime) : isPastDate;
       const winnerFriend = session.winnerId ? friends.find(f => f.id === session.winnerId) : null;
+      const creatorId = session.creatorId || (session.attendees && session.attendees[0] ? session.attendees[0].friendId : null);
+      const creatorFriend = friends.find(f => f.id === creatorId);
+      const canManage = this.canManageSession(session);
 
       return `
         <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col ${isPastDate ? 'opacity-90' : ''}">
@@ -3042,9 +3045,16 @@ const app = {
 
           <!-- Session Details -->
           <div class="p-3.5 space-y-3">
-            <div class="flex items-center gap-2 text-xs text-slate-600">
-              <i class="fa-solid fa-location-dot text-rose-500 text-xs"></i>
-              <span class="font-medium truncate">${session.location}</span>
+            <div class="flex items-center justify-between gap-2 text-xs text-slate-600">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <i class="fa-solid fa-location-dot text-rose-500 text-xs shrink-0"></i>
+                <span class="font-medium truncate">${session.location}</span>
+              </div>
+              ${creatorFriend ? `
+                <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1">
+                  <i class="fa-solid fa-user-tie text-[9px] text-brand-600"></i> Organiza: ${creatorFriend.name.split(' ')[0]}
+                </span>
+              ` : ''}
             </div>
 
             ${session.notes ? `
@@ -3202,17 +3212,24 @@ const app = {
               </div>
             ` : ''}
 
-            <!-- Share & Delete Actions Row -->
+            <!-- Share & Creator Actions Row -->
             <div class="flex items-center gap-2 pt-0.5">
               <button onclick="app.shareToWhatsapp('${session.id}')" class="flex-1 py-2 rounded-xl text-[11px] font-bold text-emerald-700 bg-emerald-100/70 active:bg-emerald-200 flex items-center justify-center gap-1.5 transition-colors">
                 <i class="fa-brands fa-whatsapp text-sm"></i>
                 <span>Compartir en WhatsApp</span>
               </button>
 
-              <button onclick="app.deleteSession('${session.id}')" class="px-3 py-2 rounded-xl text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200/80 flex items-center justify-center gap-1 transition-colors" title="Eliminar o cancelar esta partida">
-                <i class="fa-solid fa-trash-can text-[10px]"></i>
-                <span>Eliminar</span>
-              </button>
+              ${canManage ? `
+                <button onclick="app.editSession('${session.id}')" class="px-2.5 py-2 rounded-xl text-[11px] font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 active:bg-brand-200 border border-brand-200 flex items-center justify-center gap-1 transition-colors" title="Modificar fecha, hora, lugar o juego">
+                  <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                  <span>Modificar</span>
+                </button>
+
+                <button onclick="app.deleteSession('${session.id}')" class="px-2.5 py-2 rounded-xl text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200/80 flex items-center justify-center gap-1 transition-colors" title="Eliminar o cancelar esta partida">
+                  <i class="fa-solid fa-trash-can text-[10px]"></i>
+                  <span>Eliminar</span>
+                </button>
+              ` : ''}
             </div>
 
           </div>
@@ -3221,16 +3238,84 @@ const app = {
     }).join('');
   },
 
+  canManageSession(session) {
+    if (!session) return false;
+    const friends = db.getFriends();
+    const me = friends.find(f => f.id === this.currentUserId);
+    const isAdmin = me && (me.role === 'admin' || me.id === 'u1');
+    if (isAdmin) return true;
+    const creatorId = session.creatorId || (session.attendees && session.attendees[0] ? session.attendees[0].friendId : null);
+    return creatorId === this.currentUserId;
+  },
+
+  openNewSessionModal() {
+    const form = document.getElementById('form-new-session');
+    if (form) form.reset();
+    const editIdInput = document.getElementById('session-edit-id');
+    if (editIdInput) editIdInput.value = '';
+
+    const heading = document.getElementById('modal-session-heading');
+    if (heading) heading.textContent = 'Planear Noche de Juego';
+
+    const btnLabel = document.getElementById('btn-save-session-label');
+    if (btnLabel) btnLabel.textContent = 'Publicar Partida';
+
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    const dateInput = document.getElementById('session-date');
+    if (dateInput) dateInput.value = d.toISOString().split('T')[0];
+
+    const timeInput = document.getElementById('session-time');
+    if (timeInput) timeInput.value = '19:30';
+
+    this.openModal('modal-session');
+  },
+
+  editSession(sessionId) {
+    const sessions = db.getSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    if (!this.canManageSession(session)) {
+      alert('Solo el organizador de la partida o el administrador tienen permiso para modificarla.');
+      return;
+    }
+
+    const editIdInput = document.getElementById('session-edit-id');
+    if (editIdInput) editIdInput.value = session.id;
+
+    const gameSelect = document.getElementById('session-game-id');
+    if (gameSelect) gameSelect.value = session.gameId;
+
+    const dateInput = document.getElementById('session-date');
+    if (dateInput) dateInput.value = session.date || '';
+
+    let cleanTime = session.time || '19:30';
+    if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
+    const timeInput = document.getElementById('session-time');
+    if (timeInput) timeInput.value = cleanTime;
+
+    const locInput = document.getElementById('session-location');
+    if (locInput) locInput.value = session.location || '';
+
+    const notesInput = document.getElementById('session-notes');
+    if (notesInput) notesInput.value = session.notes || '';
+
+    const heading = document.getElementById('modal-session-heading');
+    if (heading) heading.textContent = 'Modificar Partida';
+
+    const btnLabel = document.getElementById('btn-save-session-label');
+    if (btnLabel) btnLabel.textContent = 'Guardar Cambios';
+
+    this.openModal('modal-session');
+  },
+
   deleteSession(sessionId) {
     const sessions = db.getSessions();
     const session = sessions.find(s => s.id === sessionId);
     if (!session) return;
 
-    const friends = db.getFriends();
-    const me = friends.find(f => f.id === this.currentUserId);
-    const isAdmin = me && (me.role === 'admin' || me.id === 'u1');
-    const isCreator = session.attendees && session.attendees[0] && session.attendees[0].friendId === this.currentUserId;
-    if (!isAdmin && !isCreator) {
+    if (!this.canManageSession(session)) {
       alert('Solo el organizador de la partida o el administrador tienen permiso para eliminarla.');
       return;
     }
@@ -3258,6 +3343,7 @@ const app = {
     const url = db.getGSheetUrl();
     if (url) {
       db.fetchJsonp(url, { action: 'delete_session', id: sessionId }).catch(() => {});
+      db.pushToGoogleSheets();
     }
   },
 
@@ -3285,6 +3371,47 @@ const app = {
       return;
     }
 
+    // Regla de coherencia: Si marca "Voy", solo puede tener 1 mesa confirmada en la misma fecha y hora
+    if (status === 'yes') {
+      const cleanTargetDate = (session.date || '').split('T')[0];
+      let cleanTargetTime = session.time || '19:30';
+      if (cleanTargetTime.includes('T')) cleanTargetTime = cleanTargetTime.split('T')[1].substring(0, 5);
+      cleanTargetTime = cleanTargetTime.substring(0, 5);
+
+      const conflictingSessions = sessions.filter(s => {
+        if (s.id === session.id) return false;
+        const sDate = (s.date || '').split('T')[0];
+        let sTime = s.time || '19:30';
+        if (sTime.includes('T')) sTime = sTime.split('T')[1].substring(0, 5);
+        sTime = sTime.substring(0, 5);
+
+        if (sDate !== cleanTargetDate || sTime !== cleanTargetTime) return false;
+        const atts = Array.isArray(s.attendees) ? s.attendees : [];
+        return atts.some(a => a.friendId === this.currentUserId && a.status === 'yes');
+      });
+
+      if (conflictingSessions.length > 0) {
+        const games = db.getGames();
+        const conflictTitles = conflictingSessions.map(cs => {
+          const g = games.find(gm => gm.id === cs.gameId);
+          return g ? `"${g.title}"` : 'otra partida';
+        }).join(', ');
+
+        const targetTitle = game ? `"${game.title}"` : 'este juego';
+
+        const confirmSwitch = confirm(
+          `⚠️ Ya confirmaste asistencia a ${conflictTitles} para la misma fecha (${cleanTargetDate}) a las ${cleanTargetTime} hrs.\n\n` +
+          `Solo es posible estar en una mesa a la vez. ¿Deseas cambiar tu asistencia a ${targetTitle} y liberar tu lugar anterior?`
+        );
+        if (!confirmSwitch) return;
+
+        // Liberar cupo en la otra partida
+        conflictingSessions.forEach(cs => {
+          cs.attendees = (Array.isArray(cs.attendees) ? cs.attendees : []).filter(a => a.friendId !== this.currentUserId);
+        });
+      }
+    }
+
     // Filtrar solo amigos registrados válidos
     session.attendees = attendees.filter(a => a.friendId !== this.currentUserId && friends.some(fr => fr.id === a.friendId));
     if (status !== 'no') {
@@ -3292,6 +3419,9 @@ const app = {
     }
 
     db.saveSessions(sessions);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
     this.renderSessions();
   },
 
@@ -3326,30 +3456,92 @@ const app = {
       return;
     }
 
+    const editId = (document.getElementById('session-edit-id')?.value || '').trim();
     const gameId = document.getElementById('session-game-id').value;
     const date = document.getElementById('session-date').value;
-    const time = document.getElementById('session-time').value;
+    let time = document.getElementById('session-time').value || '19:30';
+    if (time.includes('T')) time = time.split('T')[1].substring(0, 5);
     const location = document.getElementById('session-location').value;
     const notes = document.getElementById('session-notes').value;
 
-    const newSession = {
-      id: 's_' + Date.now(),
-      gameId,
-      date,
-      time,
-      location,
-      notes,
-      attendees: [
-        { friendId: this.currentUserId, status: 'yes' }
-      ]
-    };
-
     const sessions = db.getSessions();
-    sessions.unshift(newSession);
+    const cleanTargetDate = (date || '').split('T')[0];
+    const cleanTargetTime = time.substring(0, 5);
+
+    // Regla de coherencia: Verificar si el organizador ya estaba anotado en otra mesa a la misma fecha y hora
+    const conflictingSessions = sessions.filter(s => {
+      if (editId && s.id === editId) return false;
+      const sDate = (s.date || '').split('T')[0];
+      let sTime = s.time || '19:30';
+      if (sTime.includes('T')) sTime = sTime.split('T')[1].substring(0, 5);
+      sTime = sTime.substring(0, 5);
+
+      if (sDate !== cleanTargetDate || sTime !== cleanTargetTime) return false;
+      const atts = Array.isArray(s.attendees) ? s.attendees : [];
+      return atts.some(a => a.friendId === this.currentUserId && a.status === 'yes');
+    });
+
+    if (conflictingSessions.length > 0) {
+      const games = db.getGames();
+      const conflictTitles = conflictingSessions.map(cs => {
+        const g = games.find(gm => gm.id === cs.gameId);
+        return g ? `"${g.title}"` : 'otra partida';
+      }).join(', ');
+
+      const confirmSwitch = confirm(
+        `⚠️ Ya tienes asistencia confirmada a ${conflictTitles} para la misma fecha (${cleanTargetDate}) a las ${cleanTargetTime} hrs.\n\n` +
+        `Solo es posible participar en una mesa a la vez. ¿Deseas mover tu asistencia a esta partida?`
+      );
+      if (!confirmSwitch) return;
+
+      // Liberar cupo en la otra partida
+      conflictingSessions.forEach(cs => {
+        cs.attendees = (Array.isArray(cs.attendees) ? cs.attendees : []).filter(a => a.friendId !== this.currentUserId);
+      });
+    }
+
+    if (editId) {
+      // Modificar partida existente
+      const session = sessions.find(s => s.id === editId);
+      if (!session) return;
+      if (!this.canManageSession(session)) {
+        alert('Solo el organizador de la partida o el administrador tienen permiso para modificarla.');
+        return;
+      }
+      session.gameId = gameId;
+      session.date = date;
+      session.time = time;
+      session.location = location;
+      session.notes = notes;
+      if (!session.creatorId) {
+        session.creatorId = this.currentUserId;
+      }
+    } else {
+      // Crear nueva partida
+      const newSession = {
+        id: 's_' + Date.now(),
+        creatorId: this.currentUserId,
+        gameId,
+        date,
+        time,
+        location,
+        notes,
+        attendees: [
+          { friendId: this.currentUserId, status: 'yes' }
+        ]
+      };
+      sessions.unshift(newSession);
+    }
+
     db.saveSessions(sessions);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
 
     this.closeModal('modal-session');
     document.getElementById('form-new-session').reset();
+    const editIdInput = document.getElementById('session-edit-id');
+    if (editIdInput) editIdInput.value = '';
     this.renderSessions();
   },
 
