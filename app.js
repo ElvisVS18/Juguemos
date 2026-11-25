@@ -716,51 +716,65 @@ const db = {
     }
   },
   getFriends() {
-    const raw = localStorage.getItem('bg_friends');
-    return raw ? JSON.parse(raw) : DEFAULT_FRIENDS;
+    try {
+      const raw = localStorage.getItem('bg_friends');
+      const friends = raw ? JSON.parse(raw) : DEFAULT_FRIENDS;
+      if (Array.isArray(friends) && friends.length > 0) return friends;
+    } catch (e) {}
+    return DEFAULT_FRIENDS;
   },
   saveFriends(f) {
     localStorage.setItem('bg_friends', JSON.stringify(f));
     this.pushToGoogleSheets();
   },
   getGames() {
-    const raw = localStorage.getItem('bg_games');
-    const games = raw ? JSON.parse(raw) : DEFAULT_GAMES;
-    let deleted = [];
-    try { deleted = JSON.parse(localStorage.getItem('bg_deleted_games') || '[]'); } catch(e) {}
-    return games
-      .filter(g => !deleted.includes(g.id) && !deleted.includes((g.title || '').trim().toLowerCase()))
-      .map(g => ({
-        ...g,
-        minPlayers: parseInt(g.minPlayers) || 2,
-        maxPlayers: parseInt(g.maxPlayers) || 4,
-        durationMin: parseInt(g.durationMin) || 60,
-        image: getSafeImageUrl(g.image)
-      }));
+    try {
+      const raw = localStorage.getItem('bg_games');
+      let games = raw ? JSON.parse(raw) : DEFAULT_GAMES;
+      if (!Array.isArray(games)) games = DEFAULT_GAMES;
+      let deleted = [];
+      try { deleted = JSON.parse(localStorage.getItem('bg_deleted_games') || '[]'); } catch (e) {}
+      return games
+        .filter(g => g && !deleted.includes(g.id) && !deleted.includes((g.title || '').trim().toLowerCase()))
+        .map(g => ({
+          ...g,
+          minPlayers: parseInt(g.minPlayers) || 2,
+          maxPlayers: parseInt(g.maxPlayers) || 4,
+          durationMin: parseInt(g.durationMin) || 60,
+          image: getSafeImageUrl(g.image)
+        }));
+    } catch (e) {
+      return [];
+    }
   },
   saveGames(g) {
     localStorage.setItem('bg_games', JSON.stringify(g));
     this.pushToGoogleSheets();
   },
   getSessions() {
-    const raw = localStorage.getItem('bg_sessions');
-    const sessions = raw ? JSON.parse(raw) : DEFAULT_SESSIONS;
-    let deleted = [];
-    try { deleted = JSON.parse(localStorage.getItem('bg_deleted_sessions') || '[]'); } catch(e) {}
-    return sessions
-      .filter(s => !deleted.includes(s.id))
-      .map(s => {
-        let att = s.attendees;
-        if (typeof att === 'string') {
-          try { att = JSON.parse(att); } catch (e) { att = []; }
-        }
-        if (!Array.isArray(att)) att = [];
-        return {
-          ...s,
-          date: (s.date || '').split('T')[0],
-          attendees: att
-        };
-      });
+    try {
+      const raw = localStorage.getItem('bg_sessions');
+      let sessions = raw ? JSON.parse(raw) : DEFAULT_SESSIONS;
+      if (!Array.isArray(sessions)) sessions = DEFAULT_SESSIONS;
+      let deleted = [];
+      try { deleted = JSON.parse(localStorage.getItem('bg_deleted_sessions') || '[]'); } catch (e) {}
+      return sessions
+        .filter(s => s && !deleted.includes(s.id))
+        .map(s => {
+          let att = s.attendees;
+          if (typeof att === 'string') {
+            try { att = JSON.parse(att); } catch (e) { att = []; }
+          }
+          if (!Array.isArray(att)) att = [];
+          return {
+            ...s,
+            date: (s.date || '').split('T')[0],
+            attendees: att
+          };
+        });
+    } catch (e) {
+      return [];
+    }
   },
   saveSessions(s) {
     localStorage.setItem('bg_sessions', JSON.stringify(s));
@@ -2517,10 +2531,6 @@ const app = {
         title: finalTitle,
         minPlayers: extractedMin,
         maxPlayers: extractedMax,
-        durationMin: extractedDuration,
-        image: finalCover,
-        description: spanishReview
-      });
         durationMin: extractedDuration,
         image: finalCover,
         description: spanishReview
