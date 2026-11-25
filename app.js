@@ -1880,7 +1880,8 @@ const app = {
   },
 
   openModal(modalId) {
-    document.getElementById(modalId).classList.remove('hidden');
+    const el = document.getElementById(modalId);
+    if (el) el.classList.remove('hidden');
     if (modalId === 'modal-session') {
       const d = new Date();
       d.setDate(d.getDate() + 3);
@@ -1890,6 +1891,27 @@ const app = {
       const input = document.getElementById('input-custom-gsheet-url');
       if (input) input.value = db.getGSheetUrl();
       this.updateDbStatusUi();
+    }
+  },
+
+  closeModal(modalId) {
+    const el = document.getElementById(modalId);
+    if (el) el.classList.add('hidden');
+    if (modalId === 'modal-first-player') {
+      if (this.fpCountdownTimer) {
+        clearInterval(this.fpCountdownTimer);
+        this.fpCountdownTimer = null;
+      }
+      this.fpTouches.clear();
+      this.fpWinnerTouchId = null;
+      const zone = document.getElementById('fp-touch-zone');
+      if (zone) {
+        zone.querySelectorAll('.fp-circle').forEach(c => c.remove());
+        const overlay = document.getElementById('fp-countdown-overlay');
+        if (overlay) overlay.remove();
+      }
+      const hint = document.getElementById('fp-touch-hint');
+      if (hint) hint.classList.remove('hidden');
     }
   },
 
@@ -4281,6 +4303,20 @@ const app = {
   fpColors: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'],
 
   openFirstPlayerModal() {
+    this.fpTouches.clear();
+    this.fpWinnerTouchId = null;
+    if (this.fpCountdownTimer) {
+      clearInterval(this.fpCountdownTimer);
+      this.fpCountdownTimer = null;
+    }
+    const zone = document.getElementById('fp-touch-zone');
+    if (zone) {
+      zone.querySelectorAll('.fp-circle').forEach(el => el.remove());
+      const overlay = document.getElementById('fp-countdown-overlay');
+      if (overlay) overlay.remove();
+    }
+    const hint = document.getElementById('fp-touch-hint');
+    if (hint) hint.classList.remove('hidden');
     this.setFirstPlayerMode('touch');
     this.openModal('modal-first-player');
     this.initTouchZone();
@@ -4293,13 +4329,13 @@ const app = {
     const panelFriends = document.getElementById('fp-panel-friends');
 
     if (mode === 'touch') {
-      if (tabTouch) tabTouch.className = 'py-2 rounded-xl font-black bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1 transition-all';
-      if (tabFriends) tabFriends.className = 'py-2 rounded-xl text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1 transition-all';
+      if (tabTouch) tabTouch.className = 'py-1.5 px-3 rounded-xl font-black bg-white text-slate-950 shadow-xs flex items-center gap-1.5 transition-all';
+      if (tabFriends) tabFriends.className = 'py-1.5 px-3 rounded-xl text-slate-400 hover:text-white flex items-center gap-1.5 transition-all';
       if (panelTouch) panelTouch.classList.remove('hidden');
       if (panelFriends) panelFriends.classList.add('hidden');
     } else {
-      if (tabTouch) tabTouch.className = 'py-2 rounded-xl text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1 transition-all';
-      if (tabFriends) tabFriends.className = 'py-2 rounded-xl font-black bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1 transition-all';
+      if (tabTouch) tabTouch.className = 'py-1.5 px-3 rounded-xl text-slate-400 hover:text-white flex items-center gap-1.5 transition-all';
+      if (tabFriends) tabFriends.className = 'py-1.5 px-3 rounded-xl font-black bg-white text-slate-950 shadow-xs flex items-center gap-1.5 transition-all';
       if (panelTouch) panelTouch.classList.add('hidden');
       if (panelFriends) panelFriends.classList.remove('hidden');
       this.populateFirstPlayerFriends();
@@ -4393,21 +4429,28 @@ const app = {
       const isLoser = this.fpWinnerTouchId && !isWinner;
 
       const circle = document.createElement('div');
-      circle.className = `fp-circle absolute rounded-full flex items-center justify-center transition-all pointer-events-none select-none ${
+      circle.className = `fp-circle absolute rounded-full flex flex-col items-center justify-center transition-all pointer-events-none select-none ${
         isWinner 
-          ? 'w-20 h-20 -ml-10 -mt-10 ring-4 ring-amber-300 shadow-2xl scale-110 z-30' 
+          ? 'w-28 h-28 -ml-14 -mt-14 ring-4 ring-amber-300 shadow-[0_0_40px_rgba(245,158,11,0.8)] scale-110 z-30 animate-pulse' 
           : isLoser 
-            ? 'w-14 h-14 -ml-7 -mt-7 opacity-20' 
-            : 'w-16 h-16 -ml-8 -mt-8 ring-2 ring-white/60 animate-pulse shadow-lg'
+            ? 'w-16 h-16 -ml-8 -mt-8 opacity-20 scale-90' 
+            : 'w-24 h-24 -ml-12 -mt-12 ring-4 ring-white/70 shadow-2xl scale-100'
       }`;
       circle.style.left = `${t.x}px`;
       circle.style.top = `${t.y}px`;
       circle.style.backgroundColor = isWinner ? '#f59e0b' : t.color;
 
       if (isWinner) {
-        circle.innerHTML = '<span class="text-2xl text-white drop-shadow">👑</span>';
+        circle.innerHTML = `
+          <span class="text-3xl text-white drop-shadow-md">👑</span>
+          <span class="text-[9px] font-black uppercase text-white tracking-wider mt-0.5 drop-shadow">¡EMPIEZA!</span>
+        `;
+      } else if (isLoser) {
+        circle.innerHTML = '<span class="w-3 h-3 rounded-full bg-white/40"></span>';
       } else {
-        circle.innerHTML = '<span class="w-3 h-3 rounded-full bg-white/70"></span>';
+        circle.innerHTML = `
+          <div class="w-5 h-5 rounded-full bg-white/90 shadow-md animate-ping"></div>
+        `;
       }
 
       zone.appendChild(circle);
@@ -4420,19 +4463,22 @@ const app = {
 
     const countdownOverlay = document.createElement('div');
     countdownOverlay.id = 'fp-countdown-overlay';
-    countdownOverlay.className = 'absolute inset-0 flex items-center justify-center pointer-events-none text-white font-black text-3xl z-40 bg-black/20 backdrop-blur-2xs';
-    countdownOverlay.textContent = '¡Listos!...';
+    countdownOverlay.className = 'absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-40 bg-black/40 backdrop-blur-2xs';
+    countdownOverlay.innerHTML = '<span class="text-3xl font-black text-white/90 tracking-wide drop-shadow-lg">¡No suelten el dedo!...</span>';
     zone.appendChild(countdownOverlay);
 
     let step = 0;
     this.fpCountdownTimer = setInterval(() => {
       step++;
-      if (navigator.vibrate) navigator.vibrate(15);
+      if (navigator.vibrate) navigator.vibrate(20);
 
-      if (step === 1) countdownOverlay.textContent = '3...';
-      else if (step === 2) countdownOverlay.textContent = '2...';
-      else if (step === 3) countdownOverlay.textContent = '1...';
-      else if (step >= 4) {
+      if (step === 1) {
+        countdownOverlay.innerHTML = '<span class="text-7xl font-black text-amber-400 scale-125 animate-bounce drop-shadow-[0_0_30px_rgba(245,158,11,0.8)]">3</span>';
+      } else if (step === 2) {
+        countdownOverlay.innerHTML = '<span class="text-7xl font-black text-amber-400 scale-125 animate-bounce drop-shadow-[0_0_30px_rgba(245,158,11,0.8)]">2</span>';
+      } else if (step === 3) {
+        countdownOverlay.innerHTML = '<span class="text-7xl font-black text-amber-400 scale-125 animate-bounce drop-shadow-[0_0_30px_rgba(245,158,11,0.8)]">1</span>';
+      } else if (step >= 4) {
         clearInterval(this.fpCountdownTimer);
         this.fpCountdownTimer = null;
         countdownOverlay.remove();
@@ -4448,7 +4494,7 @@ const app = {
     this.fpWinnerTouchId = randomId;
     this.renderTouchCircles();
 
-    if (navigator.vibrate) navigator.vibrate([80, 50, 150]);
+    if (navigator.vibrate) navigator.vibrate([100, 60, 200, 60, 300]);
   },
 
   populateFirstPlayerFriends() {

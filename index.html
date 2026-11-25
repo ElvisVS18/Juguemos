@@ -887,52 +887,66 @@
   </div>
 
   <!-- ======================================================== -->
-  <!-- MODAL: ¿QUIÉN EMPIEZA PRIMERO? (SELECTOR DE PRIMER TURNO) -->
+  <!-- MODAL: ¿QUIÉN EMPIEZA PRIMERO? (PANTALLA COMPLETA TIPO CHWAZI) -->
   <!-- ======================================================== -->
-  <div id="modal-first-player" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 hidden">
-    <div onclick="app.closeModal('modal-first-player')" class="flex-1 sm:hidden"></div>
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-5 shadow-2xl animate-sheet space-y-3.5 max-h-[92vh] overflow-y-auto no-scrollbar">
-      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+  <div id="modal-first-player" class="fixed inset-0 z-50 bg-slate-950 flex flex-col p-0 hidden select-none touch-none overflow-hidden">
+    <!-- Barra Superior Compacta y Elegante -->
+    <div class="px-4 py-3 bg-slate-900/95 border-b border-slate-800/80 flex items-center justify-between gap-2 shrink-0 z-20 backdrop-blur-md">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm font-black border border-amber-500/30 shadow-xs">
+          <i class="fa-solid fa-hand-pointer"></i>
+        </div>
+        <div>
+          <h3 class="font-black text-sm text-white leading-tight">¿Quién empieza?</h3>
+          <p class="text-[10px] text-slate-400 font-medium">Selector de primer turno</p>
+        </div>
+      </div>
 
-      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
-        <h3 class="font-black text-base text-slate-900 flex items-center gap-2">
-          <i class="fa-solid fa-hand-pointer text-brand-600"></i>
-          <span>¿Quién empieza la partida?</span>
-        </h3>
-        <button onclick="app.closeModal('modal-first-player')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-          <i class="fa-solid fa-times text-xs"></i>
+      <!-- Segmented Mode: Dedos en Pantalla vs Meeples -->
+      <div class="flex items-center p-1 bg-slate-800/90 rounded-2xl border border-slate-700/80 text-xs font-bold">
+        <button type="button" onclick="app.setFirstPlayerMode('touch')" id="tab-fp-touch" class="py-1.5 px-3 rounded-xl font-black bg-white text-slate-950 shadow-xs flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-fingerprint text-xs text-brand-600"></i> <span>Dedos</span>
+        </button>
+        <button type="button" onclick="app.setFirstPlayerMode('friends')" id="tab-fp-friends" class="py-1.5 px-3 rounded-xl text-slate-400 hover:text-white flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-users text-xs"></i> <span>Meeples</span>
         </button>
       </div>
 
-      <!-- Segmented Mode: Dedos en Pantalla vs Sorteo de Amigos -->
-      <div class="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-2xl border border-slate-200 text-xs font-bold">
-        <button type="button" onclick="app.setFirstPlayerMode('touch')" id="tab-fp-touch" class="py-2 rounded-xl font-black bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1 transition-all">
-          <i class="fa-solid fa-fingerprint text-xs"></i> <span>Táctil (Dedos)</span>
-        </button>
-        <button type="button" onclick="app.setFirstPlayerMode('friends')" id="tab-fp-friends" class="py-2 rounded-xl text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1 transition-all">
-          <i class="fa-solid fa-dice text-xs"></i> <span>Meeples del Club</span>
-        </button>
-      </div>
+      <!-- Botón Cerrar -->
+      <button onclick="app.closeModal('modal-first-player')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-95 flex items-center justify-center text-slate-300 transition-all" title="Cerrar">
+        <i class="fa-solid fa-times text-sm"></i>
+      </button>
+    </div>
 
-      <!-- PANEL 1: TÁCTIL EN PANTALLA (Multi-Touch Finger Picker Chwazi style) -->
-      <div id="fp-panel-touch" class="space-y-2">
-        <p class="text-[11px] text-slate-500 text-center font-medium">Cada jugador coloque un dedo en el recuadro negro y manténgalo:</p>
-        <div id="fp-touch-zone" class="w-full h-56 bg-slate-950 rounded-2xl relative overflow-hidden flex flex-col items-center justify-center text-center p-3 cursor-pointer select-none touch-none border-2 border-slate-800 shadow-inner">
-          <div id="fp-touch-hint" class="text-slate-400 space-y-1 pointer-events-none">
-            <i class="fa-solid fa-hand-pointer text-3xl animate-bounce text-brand-400"></i>
-            <div class="font-bold text-xs text-white">Pon tu dedo aquí</div>
-            <div class="text-[10px] text-slate-400">Admite de 2 a 6 dedos a la vez</div>
+    <!-- PANEL 1: TÁCTIL EN CASI TODA LA PANTALLA (Multi-Touch Chwazi) -->
+    <div id="fp-panel-touch" class="flex-1 w-full h-full relative flex flex-col items-center justify-center overflow-hidden touch-none select-none bg-slate-950">
+      <div id="fp-touch-zone" class="absolute inset-0 w-full h-full flex flex-col items-center justify-center text-center p-6 cursor-pointer select-none touch-none">
+        <div id="fp-touch-hint" class="text-slate-400 space-y-3 pointer-events-none select-none max-w-xs px-4">
+          <div class="w-20 h-20 rounded-3xl bg-brand-500/15 border-2 border-brand-400/30 text-brand-400 flex items-center justify-center mx-auto text-3xl shadow-xl animate-pulse">
+            <i class="fa-solid fa-hand-pointer animate-bounce"></i>
           </div>
-          <!-- Touch circles rendered dynamically -->
+          <div>
+            <div class="font-black text-lg text-white">¡Pongan sus dedos aquí!</div>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+              Cada jugador apoye 1 dedo en cualquier parte de la pantalla y manténganlo fijo.
+            </p>
+          </div>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-full text-[11px] font-bold text-amber-300 shadow-inner">
+            <i class="fa-solid fa-bolt text-[10px]"></i>
+            <span>Soporta de 2 a 10 dedos a la vez</span>
+          </div>
         </div>
       </div>
+    </div>
 
-      <!-- PANEL 2: SORTEO DE AMIGOS -->
-      <div id="fp-panel-friends" class="space-y-3 hidden">
-        <p class="text-[11px] text-slate-500 text-center font-medium">Selecciona quiénes están en la mesa y sortea el turno 1:</p>
-        <div id="fp-friends-list" class="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto no-scrollbar">
-          <!-- Rendered dynamically with checkboxes -->
+    <!-- PANEL 2: SORTEO DE AMIGOS (MEEPLES) -->
+    <div id="fp-panel-friends" class="flex-1 w-full p-4 overflow-y-auto no-scrollbar flex items-center justify-center hidden bg-slate-900/60">
+      <div class="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-3.5 border border-slate-200">
+        <div class="text-center">
+          <h4 class="font-black text-sm text-slate-900">Meeples en la Mesa</h4>
+          <p class="text-[11px] text-slate-500">Marca quiénes van a jugar y sortea el turno 1:</p>
         </div>
+        <div id="fp-friends-list" class="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto no-scrollbar"></div>
         <div id="fp-friends-result" class="hidden p-3 bg-amber-50 border border-amber-200 rounded-2xl text-center space-y-1"></div>
         <button type="button" onclick="app.spinFirstPlayerFriends()" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2">
           <i class="fa-solid fa-dice-d20"></i>
@@ -985,6 +999,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=37"></script>
+  <script src="app.js?v=38"></script>
 </body>
 </html>
