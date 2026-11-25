@@ -74,17 +74,22 @@ function getSafeImageUrl(rawUrl) {
   return url;
 }
 
-// Default mock data for first load
+// Default friends for first load (founder Elvis)
 const DEFAULT_FRIENDS = [
-  { id: 'u1', name: 'Elvis', color: 'bg-red-600', initials: 'EL' },
-  { id: 'u2', name: 'Sofía', color: 'bg-blue-600', initials: 'SO' },
-  { id: 'u3', name: 'Mateo', color: 'bg-emerald-600', initials: 'MA' },
-  { id: 'u4', name: 'Valeria', color: 'bg-amber-500', initials: 'VA' },
-  { id: 'u5', name: 'Diego', color: 'bg-violet-600', initials: 'DI' }
+  { id: 'u1', name: 'Elvis', color: 'bg-red-600', initials: 'EL' }
 ];
 
 // Curated database with instant metadata, reviews & REAL official box art
 const POPULAR_GAMES_CATALOG = [
+  {
+    names: ['arcs', 'arcs: collapse and conflict', 'arcs juego', 'arcs board game'],
+    title: 'Arcs',
+    minPlayers: 2,
+    maxPlayers: 4,
+    durationMin: 90,
+    image: 'https://cf.geekdo-images.com/39lQ1j3vU_H24w6E9X6Wbg__itemrep/img/93cRzXG2cT3j9v4Jt04V-h547X4=/fit-in/500x500/filters:strip_icc()/pic6832367.png',
+    description: 'Aclamada ópera espacial de ciencia ficción y estrategia diseñada por Cole Wehrle. En un imperio galáctico al borde del colapso, los jugadores maniobran flotas estelares, compiten por ambiciones cambiantes y gestionan recursos con un innovador sistema de cartas y control de iniciativa.'
+  },
   {
     names: ['nemesis'],
     title: 'Nemesis',
@@ -686,78 +691,9 @@ POPULAR_GAMES_CATALOG.forEach(g => {
   g.image = getSafeImageUrl(g.image);
 });
 
-const DEFAULT_GAMES = [
-  {
-    id: 'g1',
-    title: 'Catan',
-    minPlayers: 3,
-    maxPlayers: 4,
-    durationMin: 75,
-    ownerId: 'u1',
-    description: 'Comercia, construye y coloniza la isla de Catán en este clásico mundial de estrategia y negociación.',
-    image: 'https://upload.wikimedia.org/wikipedia/en/a/a3/Catan-2015-boxart.jpg'
-  },
-  {
-    id: 'g2',
-    title: 'Carcassonne',
-    minPlayers: 2,
-    maxPlayers: 5,
-    durationMin: 45,
-    ownerId: 'u2',
-    description: 'Coloca losetas para construir caminos, ciudades, monasterios y campos puntuando con tus seguidores.',
-    image: 'https://upload.wikimedia.org/wikipedia/en/7/76/Carcassonne-game.jpg'
-  },
-  {
-    id: 'g3',
-    title: 'Dixit',
-    minPlayers: 3,
-    maxPlayers: 8,
-    durationMin: 35,
-    ownerId: 'u4',
-    description: 'Juego de deducción poética con preciosas cartas ilustradas donde adivinas la pista del narrador.',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Dixit_game_0001.jpg/500px-Dixit_game_0001.jpg'
-  },
-  {
-    id: 'g4',
-    title: 'Terraforming Mars',
-    minPlayers: 1,
-    maxPlayers: 5,
-    durationMin: 120,
-    ownerId: 'u3',
-    description: 'Controla corporaciones para hacer habitable Marte subiendo temperatura, oxígeno y océanos.',
-    image: 'https://upload.wikimedia.org/wikipedia/en/f/f0/Terraforming_Mars_board_game_box_cover.jpg'
-  }
-];
+const DEFAULT_GAMES = [];
 
-const DEFAULT_SESSIONS = [
-  {
-    id: 's1',
-    gameId: 'g1',
-    date: '2026-11-28',
-    time: '19:30',
-    location: 'Casa de Carlos (Miraflores)',
-    notes: '¡Habrá pizza! Traer gaseosas o cervezas. Empezamos puntual.',
-    attendees: [
-      { friendId: 'u1', status: 'yes' },
-      { friendId: 'u2', status: 'yes' },
-      { friendId: 'u3', status: 'yes' },
-      { friendId: 'u4', status: 'maybe' }
-    ]
-  },
-  {
-    id: 's2',
-    gameId: 'g3',
-    date: '2026-12-05',
-    time: '18:00',
-    location: 'Casa de Valeria',
-    notes: 'Noche chill de Dixit y cartas, ideal para invitar amigos nuevos.',
-    attendees: [
-      { friendId: 'u4', status: 'yes' },
-      { friendId: 'u2', status: 'yes' },
-      { friendId: 'u5', status: 'yes' }
-    ]
-  }
-];
+const DEFAULT_SESSIONS = [];
 
 // URL de Google Apps Script compartida por defecto para todo el club (opcional)
 const CLUB_DEFAULT_GSHEET_URL = 'https://script.google.com/macros/s/AKfycbxNSwbeR5Jdy9bP0pSHLqyka9unTXdj4fchIA4vI9r3WbrFzKx2qizxLkZBculCXm0P/exec';
@@ -790,13 +726,17 @@ const db = {
   getGames() {
     const raw = localStorage.getItem('bg_games');
     const games = raw ? JSON.parse(raw) : DEFAULT_GAMES;
-    return games.map(g => ({
-      ...g,
-      minPlayers: parseInt(g.minPlayers) || 2,
-      maxPlayers: parseInt(g.maxPlayers) || 4,
-      durationMin: parseInt(g.durationMin) || 60,
-      image: getSafeImageUrl(g.image)
-    }));
+    let deleted = [];
+    try { deleted = JSON.parse(localStorage.getItem('bg_deleted_games') || '[]'); } catch(e) {}
+    return games
+      .filter(g => !deleted.includes(g.id) && !deleted.includes((g.title || '').trim().toLowerCase()))
+      .map(g => ({
+        ...g,
+        minPlayers: parseInt(g.minPlayers) || 2,
+        maxPlayers: parseInt(g.maxPlayers) || 4,
+        durationMin: parseInt(g.durationMin) || 60,
+        image: getSafeImageUrl(g.image)
+      }));
   },
   saveGames(g) {
     localStorage.setItem('bg_games', JSON.stringify(g));
@@ -805,18 +745,22 @@ const db = {
   getSessions() {
     const raw = localStorage.getItem('bg_sessions');
     const sessions = raw ? JSON.parse(raw) : DEFAULT_SESSIONS;
-    return sessions.map(s => {
-      let att = s.attendees;
-      if (typeof att === 'string') {
-        try { att = JSON.parse(att); } catch (e) { att = []; }
-      }
-      if (!Array.isArray(att)) att = [];
-      return {
-        ...s,
-        date: (s.date || '').split('T')[0],
-        attendees: att
-      };
-    });
+    let deleted = [];
+    try { deleted = JSON.parse(localStorage.getItem('bg_deleted_sessions') || '[]'); } catch(e) {}
+    return sessions
+      .filter(s => !deleted.includes(s.id))
+      .map(s => {
+        let att = s.attendees;
+        if (typeof att === 'string') {
+          try { att = JSON.parse(att); } catch (e) { att = []; }
+        }
+        if (!Array.isArray(att)) att = [];
+        return {
+          ...s,
+          date: (s.date || '').split('T')[0],
+          attendees: att
+        };
+      });
   },
   saveSessions(s) {
     localStorage.setItem('bg_sessions', JSON.stringify(s));
@@ -886,8 +830,7 @@ const db = {
         form.method = 'POST';
         form.target = 'gsheet_hidden_iframe';
         form.style.display = 'none';
-        const input = document.createElement('input');
-        input.type = 'hidden';
+        const input = document.createElement('textarea');
         input.name = 'data';
         form.appendChild(input);
         document.body.appendChild(form);
@@ -941,61 +884,46 @@ const db = {
 
       // 1. Sincronizar Juegos
       if (data && Array.isArray(data.games)) {
-        const sanitized = data.games.map(g => ({
-          ...g,
-          minPlayers: parseInt(g.minPlayers) || 2,
-          maxPlayers: parseInt(g.maxPlayers) || 4,
-          durationMin: parseInt(g.durationMin) || 60,
-          image: getSafeImageUrl(g.image)
-        }));
+        let deletedGames = [];
+        try { deletedGames = JSON.parse(localStorage.getItem('bg_deleted_games') || '[]'); } catch(e) {}
 
-        // Si la nube solo tiene juegos antiguos/iniciales pero este equipo tiene juegos agregados
-        // (ej. Wingspan o Brass creados en PC), los preservamos y los subimos a la nube automáticamente
-        let mergedGames = [...sanitized];
-        let hasLocalOnly = false;
-        try {
-          const localList = JSON.parse(localStorage.getItem('bg_games') || '[]');
-          if (Array.isArray(localList)) {
-            localList.forEach(lg => {
-              if (lg && lg.title) {
-                const cleanL = lg.title.toLowerCase().trim();
-                const exists = sanitized.some(sg => (sg.id && sg.id === lg.id) || (sg.title && sg.title.toLowerCase().trim() === cleanL));
-                if (!exists) {
-                  mergedGames.push(lg);
-                  hasLocalOnly = true;
-                }
-              }
-            });
-          }
-        } catch(e) {}
+        const sanitized = data.games
+          .filter(g => !deletedGames.includes(g.id) && !deletedGames.includes((g.title || '').trim().toLowerCase()))
+          .map(g => ({
+            ...g,
+            minPlayers: parseInt(g.minPlayers) || 2,
+            maxPlayers: parseInt(g.maxPlayers) || 4,
+            durationMin: parseInt(g.durationMin) || 60,
+            image: getSafeImageUrl(g.image)
+          }));
 
         const currentGames = localStorage.getItem('bg_games') || '';
-        const newGames = JSON.stringify(mergedGames);
+        const newGames = JSON.stringify(sanitized);
         if (currentGames !== newGames) {
           localStorage.setItem('bg_games', newGames);
           changed = true;
-        }
-
-        if (hasLocalOnly) {
-          // Subir a Google Sheets automáticamente para que todos los dispositivos lo reciban
-          setTimeout(() => this.pushToGoogleSheets(), 1000);
         }
       }
 
       // 2. Sincronizar Sesiones (incluso si la lista quedó vacía tras eliminar una partida)
       if (data && Array.isArray(data.sessions)) {
-        const sanitizedSessions = data.sessions.map(s => {
-          let att = s.attendees;
-          if (typeof att === 'string') {
-            try { att = JSON.parse(att); } catch (e) { att = []; }
-          }
-          if (!Array.isArray(att)) att = [];
-          return {
-            ...s,
-            date: (s.date || '').split('T')[0],
-            attendees: att
-          };
-        });
+        let deletedSessions = [];
+        try { deletedSessions = JSON.parse(localStorage.getItem('bg_deleted_sessions') || '[]'); } catch(e) {}
+
+        const sanitizedSessions = data.sessions
+          .filter(s => !deletedSessions.includes(s.id))
+          .map(s => {
+            let att = s.attendees;
+            if (typeof att === 'string') {
+              try { att = JSON.parse(att); } catch (e) { att = []; }
+            }
+            if (!Array.isArray(att)) att = [];
+            return {
+              ...s,
+              date: (s.date || '').split('T')[0],
+              attendees: att
+            };
+          });
         const currentSessions = localStorage.getItem('bg_sessions') || '';
         const newSessions = JSON.stringify(sanitizedSessions);
         if (currentSessions !== newSessions) {
@@ -1133,6 +1061,25 @@ const app = {
         console.warn('Initial cloud sync error:', e);
       }
     }
+
+    // Limpieza automática de datos demo antiguos (Casa de Carlos, partidas y juegos falsos)
+    try {
+      const rawSessions = localStorage.getItem('bg_sessions');
+      if (rawSessions && (rawSessions.includes('Casa de Carlos') || rawSessions.includes('"s1"') || rawSessions.includes('"s2"'))) {
+        const cleanedSessions = JSON.parse(rawSessions).filter(s => s.id !== 's1' && s.id !== 's2' && !(s.location || '').includes('Casa de Carlos'));
+        localStorage.setItem('bg_sessions', JSON.stringify(cleanedSessions));
+      }
+      const rawGames = localStorage.getItem('bg_games');
+      if (rawGames && (rawGames.includes('"g1"') || rawGames.includes('"g2"') || rawGames.includes('"g3"') || rawGames.includes('"g4"'))) {
+        const cleanedGames = JSON.parse(rawGames).filter(g => !['g1', 'g2', 'g3', 'g4'].includes(g.id));
+        localStorage.setItem('bg_games', JSON.stringify(cleanedGames));
+      }
+      const gurl = db.getGSheetUrl();
+      if (gurl && !sessionStorage.getItem('bg_test_cleaned')) {
+        sessionStorage.setItem('bg_test_cleaned', 'true');
+        db.fetchJsonp(gurl, { action: 'clean_test_data' }).catch(() => {});
+      }
+    } catch (e) {}
 
     // 3. Inicializar valores locales por defecto SOLO si localStorage sigue vacío y SIN enviar a la nube
     if (!localStorage.getItem('bg_friends')) {
@@ -2064,13 +2011,31 @@ const app = {
       return;
     }
 
+    // Registrar en lista negra de eliminados para blindar contra resurrecciones
+    try {
+      const deleted = JSON.parse(localStorage.getItem('bg_deleted_games') || '[]');
+      if (!deleted.includes(gameId)) deleted.push(gameId);
+      if (game.title) {
+        const cleanT = game.title.trim().toLowerCase();
+        if (!deleted.includes(cleanT)) deleted.push(cleanT);
+      }
+      localStorage.setItem('bg_deleted_games', JSON.stringify(deleted));
+    } catch(e) {}
+
     const updated = games.filter(g => g.id !== gameId);
-    db.saveGames(updated);
+    localStorage.setItem('bg_games', JSON.stringify(updated));
 
     this.closeModal('modal-game-detail');
     this.populateModalSelects();
     this.renderGames();
     this.renderSessions();
+
+    // Eliminar inmediatamente en Google Sheets por ID y guardar
+    const url = db.getGSheetUrl();
+    if (url) {
+      db.fetchJsonp(url, { action: 'delete_game', id: gameId }).catch(() => {});
+      db.pushToGoogleSheets();
+    }
   },
 
   handleFileUpload(event) {
@@ -2448,6 +2413,14 @@ const app = {
       let extractedDuration = 60;
       let englishTitle = '';
 
+      // Helper para verificar si un resultado de Wikipedia realmente coincide con el título buscado
+      const isCloseMatch = (candidate, query) => {
+        if (!candidate || !query) return false;
+        const c = cleanStr(candidate).replace(/\(.*?\)/g, '').trim();
+        const q = cleanStr(query).replace(/\(.*?\)/g, '').trim();
+        return c === q || c.startsWith(q) || q.startsWith(c) || c.includes(' ' + q) || c.includes(q + ' ');
+      };
+
       try {
         const enSearchRes = await fetch(
           `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(rawQuery + ' board game')}&utf8=&format=json&origin=*`
@@ -2455,7 +2428,7 @@ const app = {
         const enSearchData = await enSearchRes.json();
         const enFirst = enSearchData?.query?.search?.[0];
 
-        if (enFirst) {
+        if (enFirst && isCloseMatch(enFirst.title, rawQuery)) {
           englishTitle = enFirst.title;
           
           // Get Official Box Cover directly without broken thumbnail scaling
@@ -2506,7 +2479,7 @@ const app = {
         );
         const esSearchData = await esSearchRes.json();
         const esFirst = esSearchData?.query?.search?.[0];
-        if (esFirst) {
+        if (esFirst && isCloseMatch(esFirst.title, rawQuery)) {
           const esSummaryRes = await fetch(`https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(esFirst.title)}`);
           const esSummary = await esSummaryRes.json();
           if (esSummary.extract) {
@@ -2525,13 +2498,14 @@ const app = {
 
       // Fallback description if Spanish review wasn't found
       if (!spanishReview) {
-        spanishReview = `${detectedTitle || rawQuery} es un reconocido juego de mesa de estrategia y entretenimiento para ${extractedMin} a ${extractedMax} jugadores con una duración aproximada de ${extractedDuration} minutos.`;
+        spanishReview = `${rawQuery} es un reconocido juego de mesa de estrategia y entretenimiento para ${extractedMin} a ${extractedMax} jugadores con una duración aproximada de ${extractedDuration} minutos.`;
       }
 
-      const finalCover = boxArtUrl || getSafeImageUrl('https://upload.wikimedia.org/wikipedia/en/a/a3/Catan-2015-boxart.jpg');
+      const finalCover = boxArtUrl || getSafeImageUrl('https://cf.geekdo-images.com/39lQ1j3vU_H24w6E9X6Wbg__itemrep/img/93cRzXG2cT3j9v4Jt04V-h547X4=/fit-in/500x500/filters:strip_icc()/pic6832367.png');
+      const finalTitle = rawQuery;
 
       // Populate ALL inputs automatically so user doesn't have to fill anything
-      document.getElementById('game-title').value = detectedTitle || rawQuery;
+      document.getElementById('game-title').value = finalTitle;
       document.getElementById('game-min').value = extractedMin;
       document.getElementById('game-max').value = extractedMax;
       document.getElementById('game-duration').value = extractedDuration;
@@ -2540,9 +2514,13 @@ const app = {
 
       // Show the Live Extracted Card with all the info ready
       this.showExtractedCard({
-        title: detectedTitle || rawQuery,
+        title: finalTitle,
         minPlayers: extractedMin,
         maxPlayers: extractedMax,
+        durationMin: extractedDuration,
+        image: finalCover,
+        description: spanishReview
+      });
         durationMin: extractedDuration,
         image: finalCover,
         description: spanishReview
@@ -2596,7 +2574,9 @@ const app = {
         image: 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?auto=format&fit=crop&w=600&q=80'
       };
 
-      const attendees = Array.isArray(session.attendees) ? session.attendees : [];
+      // Filtrar ÚNICAMENTE asistentes registrados en el club (elimina fantasmas o demo data)
+      const rawAttendees = Array.isArray(session.attendees) ? session.attendees : [];
+      const attendees = rawAttendees.filter(a => friends.some(fr => fr.id === a.friendId));
       const confirmed = attendees.filter(a => a.status === 'yes');
       const maybe = attendees.filter(a => a.status === 'maybe');
       const spotsLeft = (game.maxPlayers || 4) - confirmed.length;
@@ -2671,7 +2651,8 @@ const app = {
               <!-- Participant pills with Meeples -->
               <div class="flex flex-wrap gap-1.5 pt-0.5">
                 ${confirmed.map(att => {
-                  const f = friends.find(fr => fr.id === att.friendId) || { name: 'Amigo', color: 'bg-slate-500' };
+                  const f = friends.find(fr => fr.id === att.friendId);
+                  if (!f) return '';
                   return `
                     <span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded-full text-[11px] font-bold">
                       ${getMeepleSvg(f.color, 14)}
@@ -2681,7 +2662,8 @@ const app = {
                 }).join('')}
 
                 ${maybe.map(att => {
-                  const f = friends.find(fr => fr.id === att.friendId) || { name: 'Amigo', color: 'bg-slate-500' };
+                  const f = friends.find(fr => fr.id === att.friendId);
+                  if (!f) return '';
                   return `
                     <span class="inline-flex items-center gap-1.5 bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
                       ${getMeepleSvg(f.color, 14)}
@@ -2749,13 +2731,34 @@ const app = {
       return;
     }
 
+    // Registrar en lista negra de eliminados
+    try {
+      const deleted = JSON.parse(localStorage.getItem('bg_deleted_sessions') || '[]');
+      if (!deleted.includes(sessionId)) deleted.push(sessionId);
+      localStorage.setItem('bg_deleted_sessions', JSON.stringify(deleted));
+    } catch(e) {}
+
     const updated = sessions.filter(s => s.id !== sessionId);
     db.saveSessions(updated);
     this.renderSessions();
+
+    // Eliminar inmediatamente en Google Sheets por ID
+    const url = db.getGSheetUrl();
+    if (url) {
+      db.fetchJsonp(url, { action: 'delete_session', id: sessionId }).catch(() => {});
+    }
   },
 
   setRsvp(sessionId, status) {
     if (navigator.vibrate) navigator.vibrate(40); // Haptic feedback on mobile
+
+    const friends = db.getFriends();
+    const currentFriend = friends.find(f => f.id === this.currentUserId);
+    if (!currentFriend) {
+      alert('Para confirmar tu asistencia, por favor selecciona tu perfil o regístrate en el club.');
+      this.openUserGate(true);
+      return;
+    }
 
     const sessions = db.getSessions();
     const session = sessions.find(s => s.id === sessionId);
@@ -2770,7 +2773,8 @@ const app = {
       return;
     }
 
-    session.attendees = attendees.filter(a => a.friendId !== this.currentUserId);
+    // Filtrar solo amigos registrados válidos
+    session.attendees = attendees.filter(a => a.friendId !== this.currentUserId && friends.some(fr => fr.id === a.friendId));
     if (status !== 'no') {
       session.attendees.push({ friendId: this.currentUserId, status });
     }
@@ -2801,6 +2805,15 @@ const app = {
 
   handleCreateSession(event) {
     event.preventDefault();
+
+    const friends = db.getFriends();
+    const currentFriend = friends.find(f => f.id === this.currentUserId);
+    if (!currentFriend) {
+      alert('Por favor selecciona tu perfil o regístrate en el club antes de organizar una partida.');
+      this.openUserGate(true);
+      return;
+    }
+
     const gameId = document.getElementById('session-game-id').value;
     const date = document.getElementById('session-date').value;
     const time = document.getElementById('session-time').value;
@@ -2998,6 +3011,14 @@ const app = {
       games.unshift(newGame);
     }
 
+    // Limpiar de lista de eliminados si se vuelve a crear o editar
+    try {
+      let deleted = JSON.parse(localStorage.getItem('bg_deleted_games') || '[]');
+      const cleanT = title.trim().toLowerCase();
+      deleted = deleted.filter(d => d !== editId && d !== cleanT);
+      localStorage.setItem('bg_deleted_games', JSON.stringify(deleted));
+    } catch(e) {}
+
     db.saveGames(games);
 
     this.closeModal('modal-game');
@@ -3192,6 +3213,12 @@ const app = {
     }
 
     db.saveFriends(updatedFriends);
+
+    // Eliminar inmediatamente en Google Sheets por ID
+    const url = db.getGSheetUrl();
+    if (url) {
+      db.fetchJsonp(url, { action: 'delete_friend', id: friendId }).catch(() => {});
+    }
 
     this.populateModalSelects();
     this.updateUserHeader();
