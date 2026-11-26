@@ -42,6 +42,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
+      darkMode: 'class',
       theme: {
         extend: {
           colors: {
@@ -112,9 +113,125 @@
     html.user-entered #gate-screen {
       display: none !important;
     }
+
+    /* ======================================================== */
+    /* MODO OSCURO GLOBAL / THEME DARK STYLES */
+    /* ======================================================== */
+    html.dark body {
+      background-color: #0b0f19 !important; /* Slate muy profundo */
+      color: #f1f5f9 !important;
+    }
+    html.dark .bg-white {
+      background-color: #161f30 !important; /* Tarjetas y modales oscuros */
+      color: #f8fafc !important;
+    }
+    html.dark .bg-slate-100 {
+      background-color: #0f172a !important;
+    }
+    html.dark .bg-slate-50 {
+      background-color: #161f30 !important;
+    }
+    html.dark .text-slate-900,
+    html.dark .text-slate-800 {
+      color: #f8fafc !important;
+    }
+    html.dark .text-slate-700 {
+      color: #cbd5e1 !important;
+    }
+    html.dark .text-slate-600 {
+      color: #94a3b8 !important;
+    }
+    html.dark .text-slate-500 {
+      color: #94a3b8 !important;
+    }
+    html.dark .border-slate-100,
+    html.dark .border-slate-200,
+    html.dark .border-slate-200\/90,
+    html.dark .border-slate-200\/80,
+    html.dark .border-slate-200\/70,
+    html.dark .border-slate-300 {
+      border-color: #273549 !important;
+    }
+    html.dark input,
+    html.dark select,
+    html.dark textarea {
+      background-color: #0f172a !important;
+      color: #f8fafc !important;
+      border-color: #334155 !important;
+    }
+    html.dark input::placeholder {
+      color: #64748b !important;
+    }
+    html.dark header {
+      background-color: rgba(15, 23, 42, 0.94) !important;
+      border-bottom-color: #273549 !important;
+    }
+    html.dark #tnav-sessions.bg-white,
+    html.dark #tnav-games.bg-white,
+    html.dark #tnav-friends.bg-white {
+      background-color: #273549 !important;
+      color: #c4b5fd !important;
+    }
+    html.dark .bg-brand-50 {
+      background-color: rgba(124, 58, 237, 0.22) !important;
+      color: #ddd6fe !important;
+    }
+    html.dark .text-brand-700 {
+      color: #c4b5fd !important;
+    }
+    html.dark .bg-emerald-50 {
+      background-color: rgba(5, 150, 105, 0.2) !important;
+      color: #6ee7b7 !important;
+    }
+    html.dark .text-emerald-800,
+    html.dark .text-emerald-900 {
+      color: #6ee7b7 !important;
+    }
+    html.dark .border-emerald-200 {
+      border-color: rgba(5, 150, 105, 0.45) !important;
+    }
+    html.dark .bg-amber-50 {
+      background-color: rgba(217, 119, 6, 0.2) !important;
+      color: #fde68a !important;
+    }
+    html.dark .text-amber-800,
+    html.dark .text-amber-900,
+    html.dark .text-amber-950 {
+      color: #fde68a !important;
+    }
+    html.dark .border-amber-200 {
+      border-color: rgba(217, 119, 6, 0.45) !important;
+    }
+    html.dark .bg-indigo-50 {
+      background-color: rgba(99, 102, 241, 0.2) !important;
+      color: #c7d2fe !important;
+    }
+    html.dark .border-indigo-200 {
+      border-color: rgba(99, 102, 241, 0.45) !important;
+    }
+    html.dark .bg-rose-50 {
+      background-color: rgba(225, 29, 72, 0.2) !important;
+      color: #fecdd3 !important;
+    }
+    html.dark .border-rose-200 {
+      border-color: rgba(225, 29, 72, 0.45) !important;
+    }
   </style>
 
   <script>
+    // Fast Theme Check (Zero-Flicker before first paint)
+    (function() {
+      try {
+        var t = localStorage.getItem('bg_theme');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (t === 'dark' || (!t && prefersDark) || (t === 'system' && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) {}
+    })();
+
     // Fast check: If already logged in during this session, hide gate instantly before render
     if (sessionStorage.getItem('bg_user_entered') === 'true') {
       document.documentElement.classList.add('user-entered');
@@ -275,12 +392,17 @@
           </div>
         </div>
 
-        <!-- Right Actions: DB Cloud & Current Profile -->
+        <!-- Right Actions: DB Cloud, Theme Toggle & Current Profile -->
         <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <!-- DB Sync Button -->
           <button onclick="app.openModal('modal-db-settings')" class="flex items-center gap-1.5 py-1 px-2.5 rounded-full bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 transition-colors border border-emerald-200/80 text-emerald-800 shadow-2xs" title="Base de Datos en la Nube">
             <i id="db-status-icon" class="fa-solid fa-cloud text-emerald-600 text-xs"></i>
             <span id="db-status-label" class="text-[11px] font-extrabold hidden sm:inline">En la Nube</span>
+          </button>
+
+          <!-- Dark / Light Mode Quick Toggle Button -->
+          <button type="button" onclick="app.toggleTheme()" id="btn-theme-toggle" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 hover:bg-slate-200 active:bg-slate-300 transition-colors border border-slate-200/80 flex items-center justify-center text-slate-700 shadow-2xs shrink-0" title="Cambiar a Modo Oscuro / Claro">
+            <i id="theme-toggle-icon" class="fa-solid fa-moon text-xs"></i>
           </button>
 
           <!-- Current User Profile Pill -->
@@ -833,7 +955,32 @@
         <!-- Rendered dynamically -->
       </div>
 
-      <div class="space-y-2 pt-1 text-xs">
+      <div class="space-y-2.5 pt-1 text-xs">
+        <!-- Selector de Modo Oscuro / Modo Claro -->
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-slate-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-half-stroke text-brand-600"></i>
+              <span>Tema de la Aplicación:</span>
+            </span>
+            <span id="profile-theme-label" class="text-[10px] font-black text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">Modo Claro</span>
+          </div>
+          <div class="grid grid-cols-3 gap-1.5 pt-0.5">
+            <button type="button" onclick="app.setTheme('light')" id="theme-opt-light" class="py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-white text-slate-700 border border-slate-200">
+              <i class="fa-solid fa-sun text-amber-500"></i>
+              <span>Claro</span>
+            </button>
+            <button type="button" onclick="app.setTheme('dark')" id="theme-opt-dark" class="py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-white text-slate-700 border border-slate-200">
+              <i class="fa-solid fa-moon text-indigo-500"></i>
+              <span>Oscuro</span>
+            </button>
+            <button type="button" onclick="app.setTheme('system')" id="theme-opt-system" class="py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-white text-slate-700 border border-slate-200">
+              <i class="fa-solid fa-mobile-screen text-slate-500"></i>
+              <span>Auto</span>
+            </button>
+          </div>
+        </div>
+
         <button onclick="app.joinWhatsappGroup()" class="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold rounded-xl border border-emerald-200 flex items-center justify-center gap-2 transition-colors">
           <i class="fa-brands fa-whatsapp text-emerald-600"></i>
           <span>Unirse al Grupo de WhatsApp del Club</span>
@@ -1083,6 +1230,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=42"></script>
+  <script src="app.js?v=43"></script>
 </body>
 </html>

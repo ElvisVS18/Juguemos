@@ -1059,6 +1059,8 @@ const app = {
   activePlayerFilter: '',
 
   async init() {
+    this.initTheme();
+
     // 1. Auto-detect ?db=... in URL for seamless zero-setup sharing with friends
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -1116,6 +1118,7 @@ const app = {
     this.currentUserId = db.getCurrentUserId();
     this.updateUserHeader();
     this.updateDbStatusUi();
+    this.updateThemeUi();
     this.populateModalSelects();
 
     // Auto-migrate any existing games in localStorage with unblocked official high-res covers & reviews
@@ -1199,6 +1202,84 @@ const app = {
         triggerSync();
       });
     }
+  },
+
+  /* ======================================================== */
+  /* GESTOR DE MODO OSCURO / MODO NORMAL (THEME CONTROLLER) */
+  /* ======================================================== */
+  currentTheme: 'system',
+
+  initTheme() {
+    const saved = localStorage.getItem('bg_theme') || 'system';
+    this.currentTheme = saved;
+    this.applyThemeClass(saved);
+
+    // Listener para cuando el sistema operativo cambia entre día y noche
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if ((localStorage.getItem('bg_theme') || 'system') === 'system') {
+          this.applyThemeClass('system');
+          this.updateThemeUi();
+        }
+      });
+    }
+  },
+
+  setTheme(themeMode, save = true) {
+    if (save) {
+      localStorage.setItem('bg_theme', themeMode);
+    }
+    this.currentTheme = themeMode;
+    this.applyThemeClass(themeMode);
+    this.updateThemeUi();
+  },
+
+  toggleTheme() {
+    const isDark = document.documentElement.classList.contains('dark');
+    const newTheme = isDark ? 'light' : 'dark';
+    this.setTheme(newTheme, true);
+    if (navigator.vibrate) navigator.vibrate(25);
+  },
+
+  applyThemeClass(themeMode) {
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const shouldBeDark = themeMode === 'dark' || (themeMode === 'system' && prefersDark);
+
+    if (shouldBeDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  },
+
+  updateThemeUi() {
+    const isDark = document.documentElement.classList.contains('dark');
+    const toggleIcon = document.getElementById('theme-toggle-icon');
+    const toggleBtn = document.getElementById('btn-theme-toggle');
+
+    if (toggleIcon) {
+      toggleIcon.className = isDark ? 'fa-solid fa-sun text-amber-400 text-xs' : 'fa-solid fa-moon text-slate-700 text-xs';
+    }
+    if (toggleBtn) {
+      toggleBtn.title = isDark ? 'Cambiar a Modo Claro (Normal)' : 'Cambiar a Modo Oscuro';
+    }
+
+    const currentMode = localStorage.getItem('bg_theme') || 'system';
+    const label = document.getElementById('profile-theme-label');
+    if (label) {
+      label.textContent = currentMode === 'dark' ? 'Modo Oscuro' : currentMode === 'light' ? 'Modo Claro' : 'Automático';
+    }
+
+    ['light', 'dark', 'system'].forEach(mode => {
+      const btn = document.getElementById(`theme-opt-${mode}`);
+      if (btn) {
+        if (mode === currentMode) {
+          btn.className = 'py-2 px-1 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all bg-brand-600 text-white shadow-xs';
+        } else {
+          btn.className = 'py-2 px-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-slate-100 text-slate-600 hover:text-brand-600';
+        }
+      }
+    });
   },
 
   getShareUrl() {
@@ -1704,6 +1785,7 @@ const app = {
       }
     }
 
+    this.updateThemeUi();
     this.openModal('modal-user-profile');
   },
 
