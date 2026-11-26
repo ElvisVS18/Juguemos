@@ -119,9 +119,12 @@ function getSafeImageUrl(rawUrl) {
   return url;
 }
 
+// Enlace oficial permanente del Grupo de WhatsApp del Club
+const CLUB_DEFAULT_WHATSAPP_LINK = 'https://chat.whatsapp.com/DqZ9dKm4GvDEfYNOLoCpze?s=cl&p=i&mlu=4&ilr=4&iam=2';
+
 // Default friends for first load (founder Elvis with Royal Crown figure)
 const DEFAULT_FRIENDS = [
-  { id: 'u1', name: 'Elvis', figure: 'crown', color: 'bg-amber-500', initials: 'EL', phone: '999999999', pin: '1234', role: 'admin', whatsappGroupLink: 'https://chat.whatsapp.com/DqZ9dKm4GvDEfYNOLoCpze?s=cl&p=i&mlu=4&ilr=4&iam=2' }
+  { id: 'u1', name: 'Elvis', figure: 'crown', color: 'bg-amber-500', initials: 'EL', phone: '999999999', pin: '1234', role: 'admin', whatsappGroupLink: CLUB_DEFAULT_WHATSAPP_LINK }
 ];
 
 // Curated database with instant metadata, reviews & REAL official box art
@@ -1256,7 +1259,7 @@ const app = {
           if (this.currentTab === 'friends') this.renderFriends();
           const gate = document.getElementById('gate-screen');
           if (gate && !gate.classList.contains('hidden') && !document.documentElement.classList.contains('user-entered')) {
-            this.populateGateSelect();
+            this.setupGateLoginUi();
             if (this.gateMode === 'register') {
               this.renderGateNewMeeplePalette();
             }
@@ -1630,7 +1633,7 @@ const app = {
       if (tabRegister) tabRegister.className = 'py-2 px-2 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1.5';
       if (panelLogin) panelLogin.classList.remove('hidden');
       if (panelRegister) panelRegister.classList.add('hidden');
-      this.populateGateSelect();
+      this.setupGateLoginUi();
     } else {
       if (tabRegister) tabRegister.className = 'py-2 px-2 rounded-xl text-xs font-black transition-all bg-white text-brand-700 shadow-xs flex items-center justify-center gap-1.5';
       if (tabLogin) tabLogin.className = 'py-2 px-2 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-brand-600 flex items-center justify-center gap-1.5';
@@ -1642,39 +1645,61 @@ const app = {
     }
   },
 
-  populateGateSelect() {
-    const friends = db.getFriends();
-    const select = document.getElementById('gate-user-select');
-    if (!select) return;
+  setupGateLoginUi() {
+    const rememberedId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id') || localStorage.getItem('bg_current_user');
+    const friends = db.getFriends() || [];
+    const friend = rememberedId ? friends.find(f => f && f.id === rememberedId) : null;
 
-    if (friends.length === 0) {
-      select.innerHTML = '<option value="">No hay jugadores registrados</option>';
-      return;
-    }
-
-    select.innerHTML = friends.map(f => `
-      <option value="${f.id}" ${f.id === this.currentUserId ? 'selected' : ''}>
-        ${f.name}
-      </option>
-    `).join('');
-
-    this.handleGateUserSelectChange();
-  },
-
-  handleGateUserSelectChange() {
-    const select = document.getElementById('gate-user-select');
-    if (!select) return;
-
-    const val = select.value;
-    const friends = db.getFriends();
-    const friend = friends.find(f => f.id === val) || friends[0];
+    const rememberedBox = document.getElementById('gate-remembered-box');
+    const manualBox = document.getElementById('gate-manual-identifier-box');
+    const backBtn = document.getElementById('btn-back-to-remembered');
+    const idInput = document.getElementById('gate-remembered-user-id');
+    const meepleEl = document.getElementById('gate-preview-meeple');
+    const nameEl = document.getElementById('gate-preview-name');
+    const phoneEl = document.getElementById('gate-preview-phone');
+    const pinInput = document.getElementById('gate-login-pin');
 
     if (friend) {
-      const meepleEl = document.getElementById('gate-preview-meeple');
-      const nameEl = document.getElementById('gate-preview-name');
+      if (idInput) idInput.value = friend.id;
       if (meepleEl) meepleEl.innerHTML = getMeepleSvg(friend, 24);
       if (nameEl) nameEl.textContent = friend.name;
+      if (phoneEl) {
+        if (friend.phone && String(friend.phone).trim().length >= 6) {
+          phoneEl.textContent = '📱 ' + friend.phone;
+        } else {
+          phoneEl.textContent = '📱 Celular no registrado';
+        }
+      }
+      if (rememberedBox) rememberedBox.classList.remove('hidden');
+      if (manualBox) manualBox.classList.add('hidden');
+      if (backBtn) backBtn.classList.remove('hidden');
+    } else {
+      if (idInput) idInput.value = '';
+      if (rememberedBox) rememberedBox.classList.add('hidden');
+      if (manualBox) manualBox.classList.remove('hidden');
+      if (backBtn) backBtn.classList.add('hidden');
     }
+
+    if (pinInput) pinInput.value = '';
+  },
+
+  showCustomIdentifierLogin() {
+    const rememberedBox = document.getElementById('gate-remembered-box');
+    const manualBox = document.getElementById('gate-manual-identifier-box');
+    const backBtn = document.getElementById('btn-back-to-remembered');
+    const identifierInput = document.getElementById('gate-login-identifier');
+
+    if (rememberedBox) rememberedBox.classList.add('hidden');
+    if (manualBox) manualBox.classList.remove('hidden');
+    if (backBtn) backBtn.classList.remove('hidden');
+    if (identifierInput) {
+      identifierInput.value = '';
+      setTimeout(() => identifierInput.focus(), 60);
+    }
+  },
+
+  showRememberedUserLogin() {
+    this.setupGateLoginUi();
   },
 
   selectedFigureId: 'dice-d20',
@@ -1750,33 +1775,69 @@ const app = {
   },
 
   submitGateLogin() {
-    const select = document.getElementById('gate-user-select');
-    if (!select) return;
-    const val = select.value;
-    if (!val) {
-      alert('Por favor selecciona un perfil para ingresar.');
-      return;
+    const rememberedBox = document.getElementById('gate-remembered-box');
+    const isRememberedVisible = rememberedBox && !rememberedBox.classList.contains('hidden');
+    const friends = db.getFriends() || [];
+    let targetFriend = null;
+
+    if (isRememberedVisible) {
+      const rememberedId = document.getElementById('gate-remembered-user-id')?.value;
+      targetFriend = friends.find(f => f && f.id === rememberedId);
+      if (!targetFriend) {
+        this.showCustomIdentifierLogin();
+        alert('No se encontró el perfil en este teléfono. Por favor escribe tu celular o nombre.');
+        return;
+      }
+    } else {
+      const identifierInput = document.getElementById('gate-login-identifier');
+      const rawIdentifier = (identifierInput?.value || '').trim();
+
+      if (!rawIdentifier) {
+        alert('Por favor escribe tu número de celular o tu nombre de jugador.');
+        if (identifierInput) identifierInput.focus();
+        return;
+      }
+
+      // 1. Intento por celular (limpiando caracteres no numéricos)
+      const cleanDigits = rawIdentifier.replace(/\D/g, '');
+      if (cleanDigits.length >= 6) {
+        targetFriend = friends.find(f => {
+          if (!f || !f.phone) return false;
+          const friendDigits = String(f.phone).replace(/\D/g, '');
+          return friendDigits.endsWith(cleanDigits) || cleanDigits.endsWith(friendDigits);
+        });
+      }
+
+      // 2. Si no se encontró por celular o si el amigo aún no tenía celular registrado, buscar por Nombre
+      if (!targetFriend) {
+        const cleanName = rawIdentifier.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        targetFriend = friends.find(f => {
+          if (!f || !f.name) return false;
+          const friendName = String(f.name).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+          return friendName === cleanName || friendName.startsWith(cleanName) || cleanName.startsWith(friendName);
+        });
+      }
+
+      if (!targetFriend) {
+        alert(`No encontramos a ningún jugador registrado con "${rawIdentifier}".\n\nVerifica que esté bien escrito o regístrate en la pestaña "Registrarse".`);
+        if (identifierInput) identifierInput.focus();
+        return;
+      }
     }
 
-    const friends = db.getFriends();
-    const friend = friends.find(f => f.id === val);
-    if (!friend) {
-      alert('No se encontró el perfil seleccionado.');
-      return;
-    }
-
+    // Validar clave PIN
     const pinInput = document.getElementById('gate-login-pin');
     const enteredPin = (pinInput?.value || '').trim();
-    const expectedPin = friend.pin || '1234';
+    const expectedPin = targetFriend.pin || '1234';
 
     if (!enteredPin) {
-      alert(`Por favor escribe el PIN de 4 dígitos de ${friend.name} para ingresar.\n(El PIN inicial es 1234)`);
+      alert(`Por favor escribe la clave PIN de 4 dígitos de ${targetFriend.name} para ingresar.\n(El PIN inicial es 1234)`);
       if (pinInput) pinInput.focus();
       return;
     }
 
     if (enteredPin !== expectedPin) {
-      alert(`⚠️ Clave PIN incorrecta para ${friend.name}.\n\nSi la olvidaste, el administrador del club puede ayudarte a revisarla o cambiarla en Google Sheets.`);
+      alert(`⚠️ Clave PIN incorrecta para ${targetFriend.name}.\n\n(PIN inicial: 1234). Si la cambiaste y la olvidaste, el organizador Elvis puede ayudarte a revisarla.`);
       if (pinInput) {
         pinInput.value = '';
         pinInput.focus();
@@ -1784,12 +1845,13 @@ const app = {
       return;
     }
 
-    // Login exitoso: recordar credenciales en este teléfono
-    localStorage.setItem('bg_auth_user_id', friend.id);
+    // Login exitoso: este teléfono ahora recuerda exclusivamente a este usuario
+    localStorage.setItem('bg_auth_user_id', targetFriend.id);
     localStorage.setItem('bg_auth_user_pin', expectedPin);
+    localStorage.setItem('bg_remembered_user_id', targetFriend.id);
 
     if (pinInput) pinInput.value = '';
-    this.selectUser(val);
+    this.selectUser(targetFriend.id);
   },
 
   submitGateRegister() {
@@ -1805,14 +1867,27 @@ const app = {
     const pinConfirmInput = document.getElementById('gate-new-pin-confirm');
     const pinConfirm = pinConfirmInput ? pinConfirmInput.value.trim() : '';
 
-    if (!name) {
-      alert('Por favor escribe tu nombre o apodo para registrarte.');
+    if (!name || name.trim().length < 2) {
+      alert('Por favor escribe tu nombre o apodo para registrarte (mínimo 2 letras).');
       if (nameInput) nameInput.focus();
       return;
     }
 
-    if (!phone || phone.length < 6) {
-      alert('Por favor escribe tu número de celular para que tus amigos puedan coordinar contigo.');
+    const cleanDigits = phone.replace(/\D/g, '');
+    if (!phone || cleanDigits.length < 6) {
+      alert('Por favor escribe tu número de celular válido para que tus amigos puedan coordinar contigo.');
+      if (phoneInput) phoneInput.focus();
+      return;
+    }
+
+    const friends = db.getFriends() || [];
+    const isPhoneTaken = friends.some(f => {
+      if (!f || !f.phone) return false;
+      const fDigits = String(f.phone).replace(/\D/g, '');
+      return (fDigits.length >= 6 && cleanDigits.length >= 6) && (fDigits.endsWith(cleanDigits) || cleanDigits.endsWith(fDigits));
+    });
+    if (isPhoneTaken) {
+      alert('Ese número de celular ya está registrado por otro amigo del club.\n\nSi ya tienes cuenta, puedes ingresar en la pestaña "Iniciar Sesión".');
       if (phoneInput) phoneInput.focus();
       return;
     }
@@ -1829,20 +1904,13 @@ const app = {
       return;
     }
 
-    const friends = db.getFriends();
-    if (friends.some(f => f.phone && f.phone === phone)) {
-      alert('Ese número de celular ya está registrado por otro amigo del club.');
-      if (phoneInput) phoneInput.focus();
-      return;
-    }
-
     const takenFigures = new Set(friends.map(f => f.figure || getFigure(f.color).id));
     const hiddenFigure = document.getElementById('gate-selected-meeple-color');
     const figureId = hiddenFigure?.value || this.selectedFigureId || 'dice-d20';
     const figureObj = getFigure(figureId);
 
-    if (takenFigures.has(figureId)) {
-      alert('Esa figura de juego ya la tiene otro amigo del club. Elige una disponible.');
+    if (!figureId || takenFigures.has(figureId)) {
+      alert('Por favor elige una figura disponible del catálogo de 52 figuras.');
       return;
     }
 
@@ -1867,6 +1935,7 @@ const app = {
 
     localStorage.setItem('bg_auth_user_id', newFriend.id);
     localStorage.setItem('bg_auth_user_pin', pin);
+    localStorage.setItem('bg_remembered_user_id', newFriend.id);
 
     if (db.getGSheetUrl()) {
       db.pushToGoogleSheets();
@@ -1997,6 +2066,23 @@ const app = {
       `;
     }
 
+    // Botón de Unirse al Grupo (Solo si no se ha unido todavía, y oculto para el admin Elvis que ya es miembro)
+    const joinContainer = document.getElementById('user-whatsapp-join-container');
+    if (joinContainer) {
+      const isElvis = current.id === 'u1' || (current.name && current.name.toLowerCase().includes('elvis'));
+      const hasJoined = isAdmin || isElvis || localStorage.getItem('bg_whatsapp_joined_' + current.id) === 'true' || current.whatsappJoined === true;
+      if (!hasJoined) {
+        joinContainer.innerHTML = `
+          <button onclick="app.joinWhatsappGroup()" class="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold rounded-xl border border-emerald-200 flex items-center justify-center gap-2 transition-colors">
+            <i class="fa-brands fa-whatsapp text-emerald-600"></i>
+            <span>Unirse al Grupo de WhatsApp del Club</span>
+          </button>
+        `;
+      } else {
+        joinContainer.innerHTML = '';
+      }
+    }
+
     const adminLinkContainer = document.getElementById('admin-group-link-btn-container');
     if (adminLinkContainer) {
       if (isAdmin) {
@@ -2017,17 +2103,17 @@ const app = {
 
   getWhatsappGroupLink() {
     const local = localStorage.getItem('bg_whatsapp_group_link');
-    if (local) return local;
+    if (local && local.trim().startsWith('https://chat.whatsapp.com/')) return local.trim();
 
     // Buscar en el perfil de Elvis sincronizado desde Google Sheets a todos los teléfonos
     const friends = db.getFriends();
-    const admin = friends.find(f => f.role === 'admin' || f.id === 'u1' || f.whatsappGroupLink);
-    if (admin && admin.whatsappGroupLink) {
-      localStorage.setItem('bg_whatsapp_group_link', admin.whatsappGroupLink);
-      return admin.whatsappGroupLink;
+    const admin = friends.find(f => f && (f.role === 'admin' || f.id === 'u1' || (f.name && f.name.toLowerCase().includes('elvis'))));
+    if (admin && admin.whatsappGroupLink && admin.whatsappGroupLink.trim().startsWith('https://chat.whatsapp.com/')) {
+      localStorage.setItem('bg_whatsapp_group_link', admin.whatsappGroupLink.trim());
+      return admin.whatsappGroupLink.trim();
     }
 
-    return (typeof CLUB_DEFAULT_WHATSAPP_LINK !== 'undefined' ? CLUB_DEFAULT_WHATSAPP_LINK : '') || '';
+    return CLUB_DEFAULT_WHATSAPP_LINK;
   },
 
   setWhatsappGroupLink(url) {
@@ -2073,7 +2159,18 @@ const app = {
       }
     }
 
+    // Recordar que este usuario ya se unió al grupo para no volver a mostrar el botón
+    localStorage.setItem('bg_whatsapp_joined_' + this.currentUserId, 'true');
+    if (me) {
+      me.whatsappJoined = true;
+      db.saveFriends(friends);
+      if (db.getGSheetUrl()) {
+        db.pushToGoogleSheets();
+      }
+    }
+
     window.open(link, '_blank');
+    this.openUserProfileModal();
   },
 
   editWhatsappGroupLink() {
