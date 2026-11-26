@@ -350,18 +350,35 @@
   </div>
 
   <script>
-    // Synchronous 0ms dropdown populate from local cache before scripts finish downloading
+    // Synchronous 0ms dropdown populate and instant Meeple avatar render before external scripts load
     (function() {
       try {
+        function getInstantMeepleSvg(color, size) {
+          var map = {
+            'bg-red-600': '#dc2626',
+            'bg-blue-600': '#2563eb',
+            'bg-emerald-600': '#059669',
+            'bg-amber-500': '#d97706',
+            'bg-violet-600': '#7c3aed',
+            'bg-orange-500': '#ea580c',
+            'bg-slate-800': '#1e293b',
+            'bg-cyan-600': '#0891b2',
+            'bg-rose-500': '#e11d48',
+            'bg-teal-600': '#0d9488',
+            'bg-amber-800': '#78350f',
+            'bg-slate-400': '#94a3b8'
+          };
+          var fill = map[color] || '#dc2626';
+          return '<svg width="' + (size || 22) + '" height="' + (size || 22) + '" viewBox="0 0 100 100" fill="' + fill + '" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;"><circle cx="50" cy="22" r="14"/><path d="M 33 42 C 21 42 12 53 12 65 C 12 71 17 73 21 73 C 26 73 29 67 33 66 C 35 77 34 86 33 96 L 47 96 L 49 74 L 51 74 L 53 96 L 67 96 C 66 86 65 77 67 66 C 71 67 74 73 79 73 C 83 73 88 71 88 65 C 88 53 79 42 67 42 Z"/></svg>';
+        }
+
         var rawFriends = localStorage.getItem('bg_friends');
         var friends = rawFriends ? JSON.parse(rawFriends) : [
-          { id: 'u1', name: 'Elvis', color: 'bg-red-600' },
-          { id: 'u2', name: 'Sofía', color: 'bg-blue-600' },
-          { id: 'u3', name: 'Mateo', color: 'bg-emerald-600' },
-          { id: 'u4', name: 'Valeria', color: 'bg-amber-500' },
-          { id: 'u5', name: 'Diego', color: 'bg-violet-600' }
+          { id: 'u1', name: 'Elvis', color: 'bg-red-600' }
         ];
-        var curId = localStorage.getItem('bg_current_user_id') || friends[0].id;
+        var curId = localStorage.getItem('bg_auth_user_id') || localStorage.getItem('bg_current_user_id') || friends[0].id;
+        var curFriend = friends.find(function(f) { return f.id === curId; }) || friends[0];
+
         var sel = document.getElementById('gate-user-select');
         if (sel) {
           sel.innerHTML = friends.map(function(f) {
@@ -369,8 +386,16 @@
           }).join('');
         }
         var pName = document.getElementById('gate-preview-name');
-        var curFriend = friends.find(function(f) { return f.id === curId; }) || friends[0];
         if (pName && curFriend) pName.textContent = curFriend.name;
+
+        var pMeeple = document.getElementById('gate-preview-meeple');
+        if (pMeeple && curFriend) pMeeple.innerHTML = getInstantMeepleSvg(curFriend.color, 24);
+
+        var hAvatar = document.getElementById('header-user-avatar');
+        if (hAvatar && curFriend) hAvatar.innerHTML = getInstantMeepleSvg(curFriend.color, 20);
+
+        var hName = document.getElementById('header-user-name');
+        if (hName && curFriend) hName.textContent = curFriend.name.split(' ')[0];
       } catch(e) {}
     })();
   </script>
@@ -579,32 +604,46 @@
           </div>
         </div>
 
-        <!-- URL Input & Connect Box -->
-        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
-          <label class="block font-bold text-slate-700 text-xs flex items-center justify-between">
-            <span><i class="fa-solid fa-link text-brand-600 mr-1"></i> URL de Web App (Google Apps Script)</span>
-            <span class="text-[10px] text-brand-600 font-bold">Oficial</span>
-          </label>
-          <input type="url" id="input-custom-gsheet-url" 
-                 placeholder="https://script.google.com/macros/s/.../exec"
-                 class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-white font-mono text-slate-700 focus:ring-2 focus:ring-brand-500">
-          <button onclick="app.saveCustomGSheetUrl()" id="btn-save-custom-url" class="w-full py-2.5 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2">
-            <i class="fa-solid fa-plug"></i>
-            <span>Conectar y Probar</span>
-          </button>
+        <!-- Sección Solo Administrador: URL de Google Sheets y botones de sincronización técnica -->
+        <div id="db-admin-config-box" class="space-y-3.5">
+          <!-- URL Input & Connect Box -->
+          <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+            <label class="block font-bold text-slate-700 text-xs flex items-center justify-between">
+              <span><i class="fa-solid fa-link text-brand-600 mr-1"></i> URL de Web App (Google Apps Script)</span>
+              <span class="text-[10px] text-amber-800 bg-amber-100 font-bold px-2 py-0.5 rounded-full">👑 Solo Admin</span>
+            </label>
+            <input type="url" id="input-custom-gsheet-url" 
+                   placeholder="https://script.google.com/macros/s/.../exec"
+                   class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-white font-mono text-slate-700 focus:ring-2 focus:ring-brand-500">
+            <button onclick="app.saveCustomGSheetUrl()" id="btn-save-custom-url" class="w-full py-2.5 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2">
+              <i class="fa-solid fa-plug"></i>
+              <span>Conectar y Probar</span>
+            </button>
+          </div>
+
+          <!-- Sync Buttons Row -->
+          <div class="space-y-2">
+            <button onclick="app.pushLocalToCloud()" id="btn-modal-push" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all">
+              <i class="fa-solid fa-arrow-up-from-bracket"></i>
+              <span>Subir datos de este equipo a la Nube</span>
+            </button>
+
+            <button onclick="app.syncGoogleSheetsNow()" id="btn-modal-sync" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 flex items-center justify-center gap-2 transition-all">
+              <i class="fa-solid fa-arrow-down"></i>
+              <span>Descargar datos desde la Nube</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Sync Buttons Row -->
-        <div class="space-y-2">
-          <button onclick="app.pushLocalToCloud()" id="btn-modal-push" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all">
-            <i class="fa-solid fa-arrow-up-from-bracket"></i>
-            <span>Subir datos de este equipo a la Nube</span>
-          </button>
-
-          <button onclick="app.syncGoogleSheetsNow()" id="btn-modal-sync" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 flex items-center justify-center gap-2 transition-all">
-            <i class="fa-solid fa-arrow-down"></i>
-            <span>Descargar datos desde la Nube</span>
-          </button>
+        <!-- Mensaje para Jugadores Regulares (No administradores) -->
+        <div id="db-member-notice" class="hidden p-3 bg-emerald-50/70 rounded-2xl border border-emerald-200 text-emerald-950 text-xs leading-relaxed space-y-1">
+          <div class="font-extrabold flex items-center gap-1.5 text-emerald-900">
+            <i class="fa-solid fa-shield-halved text-emerald-600"></i>
+            <span>Sincronización Automática Activa</span>
+          </div>
+          <p class="text-[11px] text-emerald-800">
+            La conexión con Google Sheets está configurada y gestionada por el administrador <strong>Elvis</strong>. Cada vez que confirmas asistencia o registras un juego, se guarda solo en la nube.
+          </p>
         </div>
 
         <!-- WhatsApp Group Share Link -->
@@ -1230,6 +1269,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=43"></script>
+  <script src="app.js?v=44"></script>
 </body>
 </html>

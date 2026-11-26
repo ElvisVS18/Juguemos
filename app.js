@@ -1751,9 +1751,10 @@ const app = {
     const current = friends.find(f => f.id === this.currentUserId) || friends[0];
     if (!current) return;
 
+    const isAdmin = current.role === 'admin' || current.id === 'u1';
+
     const details = document.getElementById('user-profile-details');
     if (details) {
-      const isAdmin = current.role === 'admin' || current.id === 'u1';
       details.innerHTML = `
         <div class="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center shrink-0">
           ${getMeepleSvg(current.color, 28)}
@@ -2047,6 +2048,15 @@ const app = {
       document.getElementById('session-date').value = d.toISOString().split('T')[0];
     }
     if (modalId === 'modal-db-settings') {
+      const friends = db.getFriends();
+      const me = friends.find(f => f.id === this.currentUserId);
+      const isAdmin = me && (me.role === 'admin' || me.id === 'u1');
+
+      const adminBox = document.getElementById('db-admin-config-box');
+      const memberNotice = document.getElementById('db-member-notice');
+      if (adminBox) adminBox.style.display = isAdmin ? '' : 'none';
+      if (memberNotice) memberNotice.style.display = isAdmin ? 'none' : '';
+
       const input = document.getElementById('input-custom-gsheet-url');
       if (input) input.value = db.getGSheetUrl();
       this.updateDbStatusUi();
