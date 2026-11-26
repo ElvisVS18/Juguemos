@@ -745,7 +745,6 @@ const DEFAULT_SESSIONS = [];
 
 // URL de Google Apps Script compartida por defecto para todo el club (opcional)
 const CLUB_DEFAULT_GSHEET_URL = 'https://script.google.com/macros/s/AKfycbxNSwbeR5Jdy9bP0pSHLqyka9unTXdj4fchIA4vI9r3WbrFzKx2qizxLkZBculCXm0P/exec';
-const CLUB_DEFAULT_WHATSAPP_LINK = 'https://chat.whatsapp.com/DqZ9dKm4GvDEfYNOLoCpze?s=cl&p=i&mlu=4&ilr=4&iam=2'; // Enlace oficial del grupo de WhatsApp del club
 
 // Decoupled DB Layer (Siempre conectado a Google Sheets en la nube)
 const db = {
@@ -1226,10 +1225,10 @@ const app = {
     this.setTab('sessions');
 
     // INSTANT GATE: Check if device is authenticated with valid user ID & PIN
-    const authUserId = localStorage.getItem('bg_auth_user_id') || localStorage.getItem('bg_current_user');
+    const authUserId = localStorage.getItem('bg_auth_user_id');
     const authUserPin = localStorage.getItem('bg_auth_user_pin');
     const friends = db.getFriends();
-    const authenticatedFriend = friends.find(f => f.id === authUserId && (!authUserPin || (f.pin || '1234') === authUserPin));
+    const authenticatedFriend = authUserId ? friends.find(f => f.id === authUserId && (!authUserPin || (f.pin || '1234') === authUserPin)) : null;
 
     if (authenticatedFriend && sessionStorage.getItem('bg_user_entered') === 'true') {
       this.currentUserId = authenticatedFriend.id;
@@ -1617,6 +1616,7 @@ const app = {
     
     if (avatar) avatar.innerHTML = getMeepleSvg(current, 20);
     if (nameEl) nameEl.textContent = current.name.split(' ')[0];
+    this.updateWhatsappButtons();
   },
 
   gateMode: 'login',
@@ -1646,7 +1646,7 @@ const app = {
   },
 
   setupGateLoginUi() {
-    const rememberedId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id') || localStorage.getItem('bg_current_user');
+    const rememberedId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id');
     const friends = db.getFriends() || [];
     const friend = rememberedId ? friends.find(f => f && f.id === rememberedId) : null;
 
@@ -2066,22 +2066,8 @@ const app = {
       `;
     }
 
-    // Botón de Unirse al Grupo (Solo si no se ha unido todavía, y oculto para el admin Elvis que ya es miembro)
-    const joinContainer = document.getElementById('user-whatsapp-join-container');
-    if (joinContainer) {
-      const isElvis = current.id === 'u1' || (current.name && current.name.toLowerCase().includes('elvis'));
-      const hasJoined = isAdmin || isElvis || localStorage.getItem('bg_whatsapp_joined_' + current.id) === 'true' || current.whatsappJoined === true;
-      if (!hasJoined) {
-        joinContainer.innerHTML = `
-          <button onclick="app.joinWhatsappGroup()" class="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold rounded-xl border border-emerald-200 flex items-center justify-center gap-2 transition-colors">
-            <i class="fa-brands fa-whatsapp text-emerald-600"></i>
-            <span>Unirse al Grupo de WhatsApp del Club</span>
-          </button>
-        `;
-      } else {
-        joinContainer.innerHTML = '';
-      }
-    }
+    // Botones dinámicos de WhatsApp (solo si no se ha unido, oculto para admin)
+    this.updateWhatsappButtons();
 
     const adminLinkContainer = document.getElementById('admin-group-link-btn-container');
     if (adminLinkContainer) {
@@ -2099,6 +2085,42 @@ const app = {
 
     this.updateThemeUi();
     this.openModal('modal-user-profile');
+  },
+
+  updateWhatsappButtons() {
+    try {
+      const friends = db.getFriends() || [];
+      const current = friends.find(f => f && f.id === this.currentUserId);
+      const isAdmin = current && (current.role === 'admin' || current.id === 'u1' || (current.name && current.name.toLowerCase().includes('elvis')));
+      const hasJoined = isAdmin || (current && (current.whatsappJoined === true || localStorage.getItem('bg_whatsapp_joined_' + current.id) === 'true'));
+
+      // 1. Botón en el banner principal de la pestaña Sesiones
+      const bannerBtn = document.getElementById('btn-banner-whatsapp');
+      if (bannerBtn) {
+        if (hasJoined) {
+          bannerBtn.classList.add('hidden');
+        } else {
+          bannerBtn.classList.remove('hidden');
+        }
+      }
+
+      // 2. Botón en el modal de Mi Perfil
+      const joinContainer = document.getElementById('user-whatsapp-join-container');
+      if (joinContainer) {
+        if (!hasJoined) {
+          joinContainer.innerHTML = `
+            <button onclick="app.joinWhatsappGroup()" class="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold rounded-xl border border-emerald-200 flex items-center justify-center gap-2 transition-colors">
+              <i class="fa-brands fa-whatsapp text-emerald-600"></i>
+              <span>Unirse al Grupo de WhatsApp del Club</span>
+            </button>
+          `;
+        } else {
+          joinContainer.innerHTML = '';
+        }
+      }
+    } catch (e) {
+      console.warn('Error updating WhatsApp buttons:', e);
+    }
   },
 
   getWhatsappGroupLink() {
@@ -2134,33 +2156,15 @@ const app = {
   },
 
   joinWhatsappGroup() {
-    let link = this.getWhatsappGroupLink();
-    const friends = db.getFriends();
-    const me = friends.find(f => f.id === this.currentUserId);
-    const isAdmin = me && (me.role === 'admin' || me.id === 'u1');
-
-    if (!link) {
-      if (isAdmin) {
-        const newLink = prompt(
-          '👑 Como Administrador, pega aquí el enlace de invitación de tu Grupo de WhatsApp del Club:\n\n(Ejemplo: https://chat.whatsapp.com/ABC123xyz)',
-          ''
-        );
-        if (newLink && newLink.trim().startsWith('https://chat.whatsapp.com/')) {
-          this.setWhatsappGroupLink(newLink);
-          alert('¡Enlace del Grupo de WhatsApp guardado con éxito!\n\nAhora cualquier amigo que pulse este botón entrará directamente al grupo.');
-          window.open(newLink.trim(), '_blank');
-        } else if (newLink) {
-          alert('El enlace debe ser válido y comenzar con https://chat.whatsapp.com/');
-        }
-        return;
-      } else {
-        alert('El administrador aún no ha configurado el enlace del grupo de WhatsApp del club. Pídele al organizador Elvis que lo configure.');
-        return;
-      }
+    let link = this.getWhatsappGroupLink() || CLUB_DEFAULT_WHATSAPP_LINK;
+    if (!link || !link.startsWith('https://chat.whatsapp.com/')) {
+      link = CLUB_DEFAULT_WHATSAPP_LINK;
     }
 
     // Recordar que este usuario ya se unió al grupo para no volver a mostrar el botón
     localStorage.setItem('bg_whatsapp_joined_' + this.currentUserId, 'true');
+    const friends = db.getFriends();
+    const me = friends.find(f => f.id === this.currentUserId);
     if (me) {
       me.whatsappJoined = true;
       db.saveFriends(friends);
@@ -2169,8 +2173,8 @@ const app = {
       }
     }
 
+    this.updateWhatsappButtons();
     window.open(link, '_blank');
-    this.openUserProfileModal();
   },
 
   editWhatsappGroupLink() {
@@ -2315,6 +2319,7 @@ const app = {
     const gate = document.getElementById('gate-screen');
     if (gate) gate.classList.add('hidden');
     document.documentElement.classList.add('user-entered');
+    this.updateWhatsappButtons();
   },
 
   openUserSheet(canCancel) {

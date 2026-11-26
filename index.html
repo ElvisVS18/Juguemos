@@ -440,29 +440,38 @@
         }
 
         var rawFriends = localStorage.getItem('bg_friends');
-        var friends = rawFriends ? JSON.parse(rawFriends) : [
-          { id: 'u1', name: 'Elvis', figure: 'crown', color: 'bg-amber-500' }
-        ];
-        var curId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id') || friends[0].id;
-        var curFriend = friends.find(function(f) { return f.id === curId; }) || friends[0];
+        var friends = rawFriends ? JSON.parse(rawFriends) : [];
+        var rememberedId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id');
+        var curFriend = rememberedId && friends.length > 0 ? friends.find(function(f) { return f && f.id === rememberedId; }) : null;
 
-        var remInput = document.getElementById('gate-remembered-user-id');
-        if (remInput && curFriend) remInput.value = curFriend.id;
+        var remBox = document.getElementById('gate-remembered-box');
+        var manBox = document.getElementById('gate-manual-identifier-box');
 
-        var pName = document.getElementById('gate-preview-name');
-        if (pName && curFriend) pName.textContent = curFriend.name;
+        if (curFriend) {
+          var remInput = document.getElementById('gate-remembered-user-id');
+          if (remInput) remInput.value = curFriend.id;
 
-        var pPhone = document.getElementById('gate-preview-phone');
-        if (pPhone && curFriend) pPhone.textContent = curFriend.phone ? ('📱 ' + curFriend.phone) : 'Ficha asignada';
+          var pName = document.getElementById('gate-preview-name');
+          if (pName) pName.textContent = curFriend.name;
 
-        var pMeeple = document.getElementById('gate-preview-meeple');
-        if (pMeeple && curFriend) pMeeple.innerHTML = getInstantMeepleSvg(curFriend, 26);
+          var pPhone = document.getElementById('gate-preview-phone');
+          if (pPhone) pPhone.textContent = curFriend.phone ? ('📱 ' + curFriend.phone) : 'Ficha asignada';
 
-        var hAvatar = document.getElementById('header-user-avatar');
-        if (hAvatar && curFriend) hAvatar.innerHTML = getInstantMeepleSvg(curFriend, 20);
+          var pMeeple = document.getElementById('gate-preview-meeple');
+          if (pMeeple) pMeeple.innerHTML = getInstantMeepleSvg(curFriend, 26);
 
-        var hName = document.getElementById('header-user-name');
-        if (hName && curFriend) hName.textContent = curFriend.name.split(' ')[0];
+          if (remBox) remBox.classList.remove('hidden');
+          if (manBox) manBox.classList.add('hidden');
+
+          var hAvatar = document.getElementById('header-user-avatar');
+          if (hAvatar) hAvatar.innerHTML = getInstantMeepleSvg(curFriend, 20);
+
+          var hName = document.getElementById('header-user-name');
+          if (hName) hName.textContent = curFriend.name.split(' ')[0];
+        } else {
+          if (remBox) remBox.classList.add('hidden');
+          if (manBox) manBox.classList.remove('hidden');
+        }
       } catch(e) {}
     })();
   </script>
@@ -549,7 +558,7 @@
             <i class="fa-solid fa-hand-pointer text-amber-300"></i>
             <span>¿Quién empieza?</span>
           </button>
-          <button onclick="app.joinWhatsappGroup()" class="flex-1 sm:flex-none px-3.5 py-2.5 bg-emerald-500/25 hover:bg-emerald-500/35 active:bg-emerald-500/45 backdrop-blur-md text-emerald-100 font-bold text-xs rounded-xl border border-emerald-400/30 shadow active:scale-[0.98] transition-all flex items-center justify-center gap-1.5" title="Unirse al grupo de WhatsApp del Club">
+          <button id="btn-banner-whatsapp" onclick="app.joinWhatsappGroup()" class="flex-1 sm:flex-none px-3.5 py-2.5 bg-emerald-500/25 hover:bg-emerald-500/35 active:bg-emerald-500/45 backdrop-blur-md text-emerald-100 font-bold text-xs rounded-xl border border-emerald-400/30 shadow active:scale-[0.98] transition-all flex items-center justify-center gap-1.5" title="Unirse al grupo de WhatsApp del Club">
             <i class="fa-brands fa-whatsapp text-emerald-300 text-sm"></i>
             <span>Grupo WhatsApp</span>
           </button>
@@ -1367,6 +1376,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=52"></script>
+  <script src="app.js?v=53"></script>
 </body>
 </html>
