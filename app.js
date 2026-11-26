@@ -1,43 +1,88 @@
-// Iconic Board Game Meeple Palette (12 Distinct Colors)
-const MEEPLE_COLORS = [
-  { id: 'bg-red-600', name: 'Rojo', hex: '#dc2626' },
-  { id: 'bg-blue-600', name: 'Azul', hex: '#2563eb' },
-  { id: 'bg-emerald-600', name: 'Verde', hex: '#059669' },
-  { id: 'bg-amber-500', name: 'Amarillo', hex: '#d97706' },
-  { id: 'bg-violet-600', name: 'Morado', hex: '#7c3aed' },
-  { id: 'bg-orange-500', name: 'Naranja', hex: '#ea580c' },
-  { id: 'bg-slate-800', name: 'Negro', hex: '#1e293b' },
-  { id: 'bg-cyan-600', name: 'Cian', hex: '#0891b2' },
-  { id: 'bg-rose-500', name: 'Rosa', hex: '#e11d48' },
-  { id: 'bg-teal-600', name: 'Teal', hex: '#0d9488' },
-  { id: 'bg-amber-800', name: 'Café', hex: '#78350f' },
-  { id: 'bg-slate-400', name: 'Gris', hex: '#94a3b8' }
+// Catálogo Extendido de 52 Figuras Exclusivas de Juegos de Mesa (100% Únicas por Jugador)
+const BOARD_GAME_FIGURES = [
+  { id: 'crown', name: 'Corona Real', icon: 'fa-solid fa-crown', color: 'bg-amber-500', hex: '#d97706' },
+  { id: 'dice-d20', name: 'Dado D20 de Rol', icon: 'fa-solid fa-dice-d20', color: 'bg-blue-600', hex: '#2563eb' },
+  { id: 'dragon', name: 'Dragón Legendario', icon: 'fa-solid fa-dragon', color: 'bg-orange-600', hex: '#ea580c' },
+  { id: 'meeple', name: 'Meeple Clásico', icon: 'fa-solid fa-person-shelter', color: 'bg-red-600', hex: '#dc2626' },
+  { id: 'chess-pawn', name: 'Peón Estratégico', icon: 'fa-solid fa-chess-pawn', color: 'bg-emerald-600', hex: '#059669' },
+  { id: 'chess-knight', name: 'Caballo Táctico', icon: 'fa-solid fa-chess-knight', color: 'bg-violet-600', hex: '#7c3aed' },
+  { id: 'chess-rook', name: 'Torre / Fortaleza', icon: 'fa-solid fa-chess-rook', color: 'bg-slate-800', hex: '#1e293b' },
+  { id: 'train', name: 'Tren a Vapor', icon: 'fa-solid fa-train', color: 'bg-cyan-600', hex: '#0891b2' },
+  { id: 'rocket', name: 'Cohete Espacial', icon: 'fa-solid fa-rocket', color: 'bg-rose-500', hex: '#e11d48' },
+  { id: 'wizard-hat', name: 'Sombrero de Mago', icon: 'fa-solid fa-hat-wizard', color: 'bg-indigo-600', hex: '#4f46e5' },
+  { id: 'gem', name: 'Gema Preciosa', icon: 'fa-solid fa-gem', color: 'bg-teal-600', hex: '#0d9488' },
+  { id: 'swords', name: 'Espadas Cruzadas', icon: 'fa-solid fa-khanda', color: 'bg-red-700', hex: '#b91c1c' },
+  { id: 'shield', name: 'Escudo de Paladín', icon: 'fa-solid fa-shield-halved', color: 'bg-blue-700', hex: '#1d4ed8' },
+  { id: 'house', name: 'Casita / Poblado', icon: 'fa-solid fa-house', color: 'bg-amber-800', hex: '#78350f' },
+  { id: 'ship', name: 'Galeón Pirata', icon: 'fa-solid fa-ship', color: 'bg-sky-600', hex: '#0284c7' },
+  { id: 'compass', name: 'Brújula Exploradora', icon: 'fa-solid fa-compass', color: 'bg-green-700', hex: '#15803d' },
+  { id: 'ghost', name: 'Fantasma Misterioso', icon: 'fa-solid fa-ghost', color: 'bg-purple-500', hex: '#a855f7' },
+  { id: 'skull', name: 'Calavera / Peligro', icon: 'fa-solid fa-skull', color: 'bg-slate-600', hex: '#475569' },
+  { id: 'star', name: 'Estrella de Victoria', icon: 'fa-solid fa-star', color: 'bg-yellow-500', hex: '#eab308' },
+  { id: 'fire', name: 'Llama Elemental', icon: 'fa-solid fa-fire', color: 'bg-orange-500', hex: '#f97316' },
+  { id: 'trophy', name: 'Copa de Campeón', icon: 'fa-solid fa-trophy', color: 'bg-amber-600', hex: '#d97706' },
+  { id: 'potion', name: 'Poción Mágica', icon: 'fa-solid fa-flask', color: 'bg-purple-600', hex: '#9333ea' },
+  { id: 'ring', name: 'Anillo de Poder', icon: 'fa-solid fa-ring', color: 'bg-yellow-600', hex: '#ca8a04' },
+  { id: 'scroll', name: 'Pergamino Secreto', icon: 'fa-solid fa-scroll', color: 'bg-amber-700', hex: '#b45309' },
+  { id: 'cat', name: 'Gatito Caótico', icon: 'fa-solid fa-cat', color: 'bg-amber-600', hex: '#d97706' },
+  { id: 'crow', name: 'Cuervo Vigilante', icon: 'fa-solid fa-crow', color: 'bg-slate-700', hex: '#334155' },
+  { id: 'fish', name: 'Pez de Arrecife', icon: 'fa-solid fa-fish', color: 'bg-cyan-600', hex: '#0891b2' },
+  { id: 'frog', name: 'Rana de Bosque', icon: 'fa-solid fa-frog', color: 'bg-green-600', hex: '#16a34a' },
+  { id: 'spider', name: 'Araña de Cripta', icon: 'fa-solid fa-spider', color: 'bg-slate-900', hex: '#0f172a' },
+  { id: 'virus', name: 'Foco de Infección', icon: 'fa-solid fa-virus', color: 'bg-red-600', hex: '#dc2626' },
+  { id: 'ufo', name: 'Platillo Volador', icon: 'fa-solid fa-shuttle-space', color: 'bg-violet-500', hex: '#8b5cf6' },
+  { id: 'robot', name: 'Autómata / Robot', icon: 'fa-solid fa-robot', color: 'bg-slate-500', hex: '#64748b' },
+  { id: 'bolt', name: 'Relámpago de Energía', icon: 'fa-solid fa-bolt', color: 'bg-yellow-500', hex: '#eab308' },
+  { id: 'anchor', name: 'Ancla de Corsario', icon: 'fa-solid fa-anchor', color: 'bg-blue-800', hex: '#1e40af' },
+  { id: 'clover', name: 'Trébol de la Suerte', icon: 'fa-solid fa-clover', color: 'bg-emerald-500', hex: '#10b981' },
+  { id: 'feather', name: 'Pluma de Escribano', icon: 'fa-solid fa-feather-pointed', color: 'bg-yellow-700', hex: '#a16207' },
+  { id: 'heart', name: 'Corazón / Vida', icon: 'fa-solid fa-heart', color: 'bg-rose-600', hex: '#e11d48' },
+  { id: 'key', name: 'Llave Dorada', icon: 'fa-solid fa-key', color: 'bg-amber-500', hex: '#f59e0b' },
+  { id: 'car', name: 'Bólido de Carreras', icon: 'fa-solid fa-car-side', color: 'bg-red-500', hex: '#ef4444' },
+  { id: 'plane', name: 'Avión de Expedición', icon: 'fa-solid fa-plane', color: 'bg-blue-500', hex: '#3b82f6' },
+  { id: 'bomb', name: 'Bomba de Tiempo', icon: 'fa-solid fa-bomb', color: 'bg-zinc-800', hex: '#27272a' },
+  { id: 'tree', name: 'Pino del Bosque', icon: 'fa-solid fa-tree', color: 'bg-green-700', hex: '#15803d' },
+  { id: 'mountain', name: 'Montaña Nevada', icon: 'fa-solid fa-mountain', color: 'bg-slate-600', hex: '#475569' },
+  { id: 'moon', name: 'Luna de Medianoche', icon: 'fa-solid fa-moon', color: 'bg-indigo-500', hex: '#6366f1' },
+  { id: 'sun', name: 'Sol Naciente', icon: 'fa-solid fa-sun', color: 'bg-amber-400', hex: '#fbbf24' },
+  { id: 'cube', name: 'Cubo de Recurso', icon: 'fa-solid fa-cube', color: 'bg-teal-600', hex: '#0d9488' },
+  { id: 'coins', name: 'Bolsa de Monedas', icon: 'fa-solid fa-coins', color: 'bg-yellow-500', hex: '#eab308' },
+  { id: 'hourglass', name: 'Reloj de Arena', icon: 'fa-solid fa-hourglass-half', color: 'bg-amber-700', hex: '#b45309' },
+  { id: 'bullseye', name: 'Diana de Puntería', icon: 'fa-solid fa-bullseye', color: 'bg-red-600', hex: '#dc2626' },
+  { id: 'flag', name: 'Bandera de Conquista', icon: 'fa-solid fa-flag', color: 'bg-violet-600', hex: '#7c3aed' },
+  { id: 'eye', name: 'Ojo Que Todo Lo Ve', icon: 'fa-solid fa-eye', color: 'bg-sky-600', hex: '#0284c7' },
+  { id: 'wand', name: 'Varita de Mago', icon: 'fa-solid fa-wand-magic-sparkles', color: 'bg-fuchsia-600', hex: '#c026d3' }
 ];
 
-// SVG generator for classic board game Meeples (Carcassonne style)
-function getMeepleSvg(colorKeyOrHex, size = 22) {
-  const map = {
-    'bg-red-600': '#dc2626',
-    'bg-blue-600': '#2563eb',
-    'bg-blue-500': '#2563eb',
-    'bg-emerald-600': '#059669',
-    'bg-emerald-500': '#059669',
-    'bg-amber-500': '#d97706',
-    'bg-violet-600': '#7c3aed',
-    'bg-orange-500': '#ea580c',
-    'bg-slate-800': '#1e293b',
-    'bg-cyan-600': '#0891b2',
-    'bg-rose-500': '#e11d48',
-    'bg-teal-600': '#0d9488',
-    'bg-amber-800': '#78350f',
-    'bg-slate-400': '#94a3b8',
-    'bg-fuchsia-600': '#c026d3'
-  };
-  const fill = map[colorKeyOrHex] || colorKeyOrHex || '#dc2626';
-  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="${fill}" class="shrink-0 inline-block drop-shadow-2xs" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
-    <circle cx="50" cy="22" r="14"/>
-    <path d="M 33 42 C 21 42 12 53 12 65 C 12 71 17 73 21 73 C 26 73 29 67 33 66 C 35 77 34 86 33 96 L 47 96 L 49 74 L 51 74 L 53 96 L 67 96 C 66 86 65 77 67 66 C 71 67 74 73 79 73 C 83 73 88 71 88 65 C 88 53 79 42 67 42 Z"/>
-  </svg>`;
+// Helper para encontrar la figura o mapear desde colores antiguos
+function getFigure(target) {
+  if (!target) return BOARD_GAME_FIGURES[0];
+  if (typeof target === 'object') {
+    if (target.figure) {
+      const f = BOARD_GAME_FIGURES.find(x => x.id === target.figure);
+      if (f) return f;
+    }
+    if (target.color) {
+      const f = BOARD_GAME_FIGURES.find(x => x.color === target.color || x.id === target.color);
+      if (f) return f;
+    }
+  }
+  const byId = BOARD_GAME_FIGURES.find(x => x.id === target);
+  if (byId) return byId;
+
+  const byColor = BOARD_GAME_FIGURES.find(x => x.color === target);
+  if (byColor) return byColor;
+
+  return BOARD_GAME_FIGURES[0];
+}
+
+// Generador universal de Fichas/Figuras de Jugador para toda la web
+function getMeepleSvg(target, size = 22) {
+  const fig = getFigure(target);
+  const iconSize = Math.max(9, Math.round(size * 0.54));
+  return `<span class="shrink-0 inline-flex items-center justify-center rounded-lg text-white shadow-2xs font-bold leading-none select-none ${fig.color}" style="width:${size}px; height:${size}px; font-size:${iconSize}px; vertical-align:middle;" title="${fig.name}">
+    <i class="${fig.icon}"></i>
+  </span>`;
 }
 
 // Global Image URL Sanitizer (Direct clean HTTPS URLs without broken third-party proxies)
@@ -74,9 +119,9 @@ function getSafeImageUrl(rawUrl) {
   return url;
 }
 
-// Default friends for first load (founder Elvis)
+// Default friends for first load (founder Elvis with Royal Crown figure)
 const DEFAULT_FRIENDS = [
-  { id: 'u1', name: 'Elvis', color: 'bg-red-600', initials: 'EL', phone: '999999999', pin: '1234', role: 'admin' }
+  { id: 'u1', name: 'Elvis', figure: 'crown', color: 'bg-amber-500', initials: 'EL', phone: '999999999', pin: '1234', role: 'admin', whatsappGroupLink: 'https://chat.whatsapp.com/DqZ9dKm4GvDEfYNOLoCpze?s=cl&p=i&mlu=4&ilr=4&iam=2' }
 ];
 
 // Curated database with instant metadata, reviews & REAL official box art
@@ -697,6 +742,7 @@ const DEFAULT_SESSIONS = [];
 
 // URL de Google Apps Script compartida por defecto para todo el club (opcional)
 const CLUB_DEFAULT_GSHEET_URL = 'https://script.google.com/macros/s/AKfycbxNSwbeR5Jdy9bP0pSHLqyka9unTXdj4fchIA4vI9r3WbrFzKx2qizxLkZBculCXm0P/exec';
+const CLUB_DEFAULT_WHATSAPP_LINK = 'https://chat.whatsapp.com/DqZ9dKm4GvDEfYNOLoCpze?s=cl&p=i&mlu=4&ilr=4&iam=2'; // Enlace oficial del grupo de WhatsApp del club
 
 // Decoupled DB Layer (Siempre conectado a Google Sheets en la nube)
 const db = {
@@ -724,7 +770,8 @@ const db = {
           ...f,
           phone: f.phone || (f.id === 'u1' ? '999999999' : ''),
           pin: f.pin || '1234',
-          role: f.role || (f.id === 'u1' ? 'admin' : 'member')
+          role: f.role || (f.id === 'u1' ? 'admin' : 'member'),
+          whatsappGroupLink: f.whatsappGroupLink || (f.id === 'u1' ? localStorage.getItem('bg_whatsapp_group_link') || '' : '')
         }));
       }
     } catch (e) {}
@@ -1061,12 +1108,18 @@ const app = {
   async init() {
     this.initTheme();
 
-    // 1. Auto-detect ?db=... in URL for seamless zero-setup sharing with friends
+    // 1. Auto-detect ?db=... o ?wgrp=... in URL for seamless zero-setup sharing with friends
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const dbParam = urlParams.get('db');
       if (dbParam && dbParam.startsWith('https://script.google.com/macros/s/')) {
         db.setGSheetUrl(dbParam);
+      }
+      const wgrpParam = urlParams.get('wgrp');
+      if (wgrpParam && (wgrpParam.startsWith('https://chat.whatsapp.com/') || wgrpParam.includes('whatsapp.com'))) {
+        localStorage.setItem('bg_whatsapp_group_link', decodeURIComponent(wgrpParam).trim());
+      }
+      if (dbParam || wgrpParam) {
         try {
           const cleanUrl = window.location.origin + window.location.pathname;
           window.history.replaceState({}, document.title, cleanUrl);
@@ -1084,6 +1137,19 @@ const app = {
         console.warn('Initial cloud sync error:', e);
       }
     }
+
+    // 3. Sincronizar enlace de WhatsApp entre dispositivos vía Google Sheets
+    try {
+      const friends = db.getFriends();
+      const admin = friends.find(f => f.role === 'admin' || f.id === 'u1') || friends[0];
+      const localWgrp = localStorage.getItem('bg_whatsapp_group_link');
+      if (admin && admin.whatsappGroupLink && !localWgrp) {
+        localStorage.setItem('bg_whatsapp_group_link', admin.whatsappGroupLink);
+      } else if (localWgrp && admin && !admin.whatsappGroupLink) {
+        admin.whatsappGroupLink = localWgrp;
+        db.saveFriends(friends);
+      }
+    } catch (e) {}
 
     // Limpieza automática de datos demo antiguos (Casa de Carlos, partidas y juegos falsos)
     try {
@@ -1116,6 +1182,34 @@ const app = {
     }
 
     this.currentUserId = db.getCurrentUserId();
+
+    // Auto-migrar perfiles existentes para que tengan su Figura única de juego de mesa
+    const currentFriendsList = db.getFriends();
+    let figuresMigrated = false;
+    const assignedFigures = new Set();
+    currentFriendsList.forEach(f => {
+      if (!f.figure) {
+        if (f.id === 'u1' || (f.name && f.name.toLowerCase().includes('elvis'))) {
+          f.figure = 'crown';
+          f.color = 'bg-amber-500';
+        } else {
+          const avail = BOARD_GAME_FIGURES.find(bgf => !assignedFigures.has(bgf.id) && bgf.id !== 'crown');
+          if (avail) {
+            f.figure = avail.id;
+            f.color = avail.color;
+          } else {
+            f.figure = 'meeple';
+            f.color = 'bg-red-600';
+          }
+        }
+        figuresMigrated = true;
+      }
+      assignedFigures.add(f.figure);
+    });
+    if (figuresMigrated) {
+      db.saveFriends(currentFriendsList);
+    }
+
     this.updateUserHeader();
     this.updateDbStatusUi();
     this.updateThemeUi();
@@ -1284,11 +1378,17 @@ const app = {
 
   getShareUrl() {
     let base = window.location.href.split('?')[0].split('#')[0];
+    const params = new URLSearchParams();
     const url = db.getGSheetUrl();
     if (url && url !== CLUB_DEFAULT_GSHEET_URL) {
-      return `${base}?db=${encodeURIComponent(url)}`;
+      params.set('db', url);
     }
-    return base;
+    const wgrp = this.getWhatsappGroupLink();
+    if (wgrp && wgrp.includes('whatsapp.com')) {
+      params.set('wgrp', wgrp);
+    }
+    const q = params.toString();
+    return q ? `${base}?${q}` : base;
   },
 
   updateDbStatusUi() {
@@ -1510,7 +1610,7 @@ const app = {
     const avatar = document.getElementById('header-user-avatar');
     const nameEl = document.getElementById('header-user-name');
     
-    if (avatar) avatar.innerHTML = getMeepleSvg(current.color, 20);
+    if (avatar) avatar.innerHTML = getMeepleSvg(current, 20);
     if (nameEl) nameEl.textContent = current.name.split(' ')[0];
   },
 
@@ -1570,53 +1670,64 @@ const app = {
     if (friend) {
       const meepleEl = document.getElementById('gate-preview-meeple');
       const nameEl = document.getElementById('gate-preview-name');
-      if (meepleEl) meepleEl.innerHTML = getMeepleSvg(friend.color, 24);
+      if (meepleEl) meepleEl.innerHTML = getMeepleSvg(friend, 24);
       if (nameEl) nameEl.textContent = friend.name;
     }
   },
 
-  selectedMeepleColor: 'bg-red-600',
+  selectedFigureId: 'dice-d20',
 
-  setGateNewMeepleColor(colorId) {
-    this.selectedMeepleColor = colorId;
+  setGateNewMeepleColor(figId) {
+    this.selectedFigureId = figId;
     const hidden = document.getElementById('gate-selected-meeple-color');
-    if (hidden) hidden.value = colorId;
+    if (hidden) hidden.value = figId;
     this.renderGateNewMeeplePalette();
   },
 
-  renderGateNewMeeplePalette() {
+  renderGateNewMeeplePalette(searchQuery = '') {
     const friends = db.getFriends();
-    const takenColors = new Set(friends.map(f => f.color));
+    const takenFigures = new Map();
+    friends.forEach(f => {
+      const fId = f.figure || getFigure(f.color).id;
+      takenFigures.set(fId, f.name.split(' ')[0]);
+    });
+
     const box = document.getElementById('gate-new-meeple-palette');
     if (!box) return;
 
-    // Find first available color if current selection is taken
-    const availableColors = MEEPLE_COLORS.filter(mc => !takenColors.has(mc.id));
-    if (!this.selectedMeepleColor || takenColors.has(this.selectedMeepleColor)) {
-      this.selectedMeepleColor = availableColors.length > 0 ? availableColors[0].id : MEEPLE_COLORS[0].id;
+    // Find first available figure if current selection is taken
+    const availableFigures = BOARD_GAME_FIGURES.filter(fig => !takenFigures.has(fig.id));
+    if (!this.selectedFigureId || takenFigures.has(this.selectedFigureId)) {
+      this.selectedFigureId = availableFigures.length > 0 ? availableFigures[0].id : BOARD_GAME_FIGURES[0].id;
     }
     const hidden = document.getElementById('gate-selected-meeple-color');
-    if (hidden) hidden.value = this.selectedMeepleColor;
+    if (hidden) hidden.value = this.selectedFigureId;
 
-    box.innerHTML = MEEPLE_COLORS.map(mc => {
-      const isTaken = takenColors.has(mc.id);
-      const isSel = mc.id === this.selectedMeepleColor && !isTaken;
+    const q = (searchQuery || (document.getElementById('gate-figure-search')?.value || '')).toLowerCase().trim();
+    const filtered = BOARD_GAME_FIGURES.filter(fig => !q || fig.name.toLowerCase().includes(q) || fig.id.includes(q));
+
+    box.innerHTML = filtered.map(fig => {
+      const isTaken = takenFigures.has(fig.id);
+      const isSel = fig.id === this.selectedFigureId && !isTaken;
 
       if (isTaken) {
-        const takenFriend = friends.find(f => f.color === mc.id);
-        const ownerName = takenFriend ? takenFriend.name.split(' ')[0] : 'Ocupado';
+        const ownerName = takenFigures.get(fig.id) || 'Ocupado';
         return `
-          <div class="p-1.5 rounded-xl bg-slate-100/70 border border-slate-200/50 opacity-35 flex flex-col items-center gap-0.5 cursor-not-allowed select-none" title="Color ya elegido por ${ownerName}">
-            ${getMeepleSvg(mc.id, 20)}
-            <span class="text-[8px] font-bold text-slate-500 truncate max-w-[50px]">${ownerName}</span>
+          <div class="p-1 rounded-xl bg-slate-100/70 border border-slate-200/50 opacity-35 flex flex-col items-center justify-center gap-0.5 cursor-not-allowed select-none" title="Figura ya elegida por ${ownerName}">
+            <div class="w-7 h-7 rounded-lg ${fig.color} text-white flex items-center justify-center text-[11px] opacity-70">
+              <i class="${fig.icon}"></i>
+            </div>
+            <span class="text-[7.5px] font-bold text-slate-500 truncate max-w-[48px]">${ownerName}</span>
           </div>
         `;
       }
 
       return `
-        <button type="button" onclick="app.setGateNewMeepleColor('${mc.id}')" class="p-1.5 rounded-xl transition-all flex flex-col items-center gap-0.5 bg-white border ${isSel ? 'border-brand-500 ring-2 ring-brand-400 shadow-xs scale-105 bg-brand-50/40' : 'border-slate-200 hover:border-brand-300 active:scale-95'}">
-          ${getMeepleSvg(mc.id, 22)}
-          <span class="text-[8px] font-bold text-slate-700">${mc.name}</span>
+        <button type="button" onclick="app.setGateNewMeepleColor('${fig.id}')" class="p-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 bg-white border ${isSel ? 'border-brand-500 ring-2 ring-brand-400 shadow-xs scale-105 bg-brand-50/50' : 'border-slate-200 hover:border-brand-300 active:scale-95'}">
+          <div class="w-7 h-7 rounded-lg ${fig.color} text-white flex items-center justify-center text-[12px] shadow-2xs">
+            <i class="${fig.icon}"></i>
+          </div>
+          <span class="text-[7.5px] font-bold text-slate-700 truncate max-w-[50px]">${fig.name.split(' ')[0]}</span>
         </button>
       `;
     }).join('');
@@ -1709,12 +1820,13 @@ const app = {
       return;
     }
 
-    const takenColors = new Set(friends.map(f => f.color));
-    const hiddenColor = document.getElementById('gate-selected-meeple-color');
-    const color = hiddenColor?.value || this.selectedMeepleColor || 'bg-red-600';
+    const takenFigures = new Set(friends.map(f => f.figure || getFigure(f.color).id));
+    const hiddenFigure = document.getElementById('gate-selected-meeple-color');
+    const figureId = hiddenFigure?.value || this.selectedFigureId || 'dice-d20';
+    const figureObj = getFigure(figureId);
 
-    if (takenColors.has(color)) {
-      alert('Ese color de Meeple ya lo tiene otro amigo del club. Elige uno disponible.');
+    if (takenFigures.has(figureId)) {
+      alert('Esa figura de juego ya la tiene otro amigo del club. Elige una disponible.');
       return;
     }
 
@@ -1728,7 +1840,8 @@ const app = {
       name,
       phone,
       pin,
-      color,
+      figure: figureObj.id,
+      color: figureObj.color,
       initials,
       role: friends.length === 0 ? 'admin' : 'member'
     };
@@ -1746,18 +1859,100 @@ const app = {
     this.selectUser(newFriend.id);
   },
 
+  /* ======================================================== */
+  /* GESTOR DE FICHA / FIGURA ÚNICA DEL CLUB (52 OPCIONES) */
+  /* ======================================================== */
+  openFigurePickerModal() {
+    const searchInput = document.getElementById('input-search-figures');
+    if (searchInput) searchInput.value = '';
+    this.renderFigurePickerGrid('');
+    this.openModal('modal-figure-picker');
+  },
+
+  renderFigurePickerGrid(search = '') {
+    const friends = db.getFriends();
+    const current = friends.find(f => f.id === this.currentUserId);
+    const currentFigId = current?.figure || getFigure(current?.color).id;
+
+    const takenMap = new Map();
+    friends.forEach(f => {
+      const fFig = f.figure || getFigure(f.color).id;
+      if (f.id !== this.currentUserId) {
+        takenMap.set(fFig, f.name.split(' ')[0]);
+      }
+    });
+
+    const box = document.getElementById('figure-picker-grid');
+    if (!box) return;
+
+    const q = (search || '').toLowerCase().trim();
+    const filtered = BOARD_GAME_FIGURES.filter(fig => !q || fig.name.toLowerCase().includes(q) || fig.id.includes(q));
+
+    box.innerHTML = filtered.map(fig => {
+      const isTaken = takenMap.has(fig.id);
+      const isMine = fig.id === currentFigId;
+      const ownerName = isTaken ? takenMap.get(fig.id) : '';
+
+      if (isTaken) {
+        return `
+          <div class="p-2 rounded-2xl bg-slate-100/70 border border-slate-200/60 opacity-40 flex flex-col items-center justify-center gap-1 cursor-not-allowed select-none" title="Elegido por ${ownerName}">
+            <div class="w-9 h-9 rounded-xl ${fig.color} text-white flex items-center justify-center text-sm opacity-60">
+              <i class="${fig.icon}"></i>
+            </div>
+            <span class="text-[9px] font-bold text-slate-500 truncate max-w-[65px]">${ownerName}</span>
+          </div>
+        `;
+      }
+
+      return `
+        <button type="button" onclick="app.selectPlayerFigure('${fig.id}')" class="p-2 rounded-2xl transition-all flex flex-col items-center justify-center gap-1 bg-white border ${isMine ? 'border-brand-500 ring-2 ring-brand-400 bg-brand-50/60 shadow-xs scale-105' : 'border-slate-200 hover:border-brand-300 active:scale-95'}">
+          <div class="w-9 h-9 rounded-xl ${fig.color} text-white flex items-center justify-center text-base shadow-2xs">
+            <i class="${fig.icon}"></i>
+          </div>
+          <span class="text-[9px] font-extrabold text-slate-800 truncate max-w-[65px]">${fig.name}</span>
+          ${isMine ? '<span class="text-[8px] font-black text-brand-700 uppercase bg-brand-100 px-1 rounded">Tu Ficha</span>' : ''}
+        </button>
+      `;
+    }).join('');
+  },
+
+  selectPlayerFigure(figureId) {
+    const friends = db.getFriends();
+    const current = friends.find(f => f.id === this.currentUserId);
+    if (!current) return;
+
+    const fig = getFigure(figureId);
+    current.figure = fig.id;
+    current.color = fig.color;
+
+    db.saveFriends(friends);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
+
+    this.updateUserHeader();
+    this.closeModal('modal-figure-picker');
+    this.openUserProfileModal();
+    this.renderFriends();
+    this.renderSessions();
+
+    if (navigator.vibrate) navigator.vibrate([40, 60]);
+    alert(`🎉 ¡Ficha Oficial Asignada!\n\nTu figura única en el club ahora es "${fig.name}". Ya aparece actualizada en tu perfil y en todas las partidas.`);
+  },
+
   openUserProfileModal() {
     const friends = db.getFriends();
     const current = friends.find(f => f.id === this.currentUserId) || friends[0];
     if (!current) return;
 
     const isAdmin = current.role === 'admin' || current.id === 'u1';
+    const currentFig = getFigure(current);
 
     const details = document.getElementById('user-profile-details');
     if (details) {
       details.innerHTML = `
         <div class="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center shrink-0">
-          ${getMeepleSvg(current.color, 28)}
+          ${getMeepleSvg(current, 28)}
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
@@ -1766,7 +1961,7 @@ const app = {
               ${isAdmin ? '👑 Admin' : '♟️ Jugador'}
             </span>
           </div>
-          <p class="text-[11px] text-slate-500 font-medium mt-0.5"><i class="fa-brands fa-whatsapp text-emerald-600"></i> ${current.phone || 'Sin celular'}</p>
+          <p class="text-[11px] text-slate-600 font-medium mt-0.5"><span class="font-bold text-slate-800">Ficha:</span> ${currentFig.name}</p>
           <p class="text-[10px] text-brand-600 font-bold mt-0.5"><i class="fa-solid fa-key text-[9px]"></i> PIN: •••• (Protegido)</p>
         </div>
       `;
@@ -1791,14 +1986,34 @@ const app = {
   },
 
   getWhatsappGroupLink() {
-    return localStorage.getItem('bg_whatsapp_group_link') || '';
+    const local = localStorage.getItem('bg_whatsapp_group_link');
+    if (local) return local;
+
+    // Buscar en el perfil de Elvis sincronizado desde Google Sheets a todos los teléfonos
+    const friends = db.getFriends();
+    const admin = friends.find(f => f.role === 'admin' || f.id === 'u1' || f.whatsappGroupLink);
+    if (admin && admin.whatsappGroupLink) {
+      localStorage.setItem('bg_whatsapp_group_link', admin.whatsappGroupLink);
+      return admin.whatsappGroupLink;
+    }
+
+    return (typeof CLUB_DEFAULT_WHATSAPP_LINK !== 'undefined' ? CLUB_DEFAULT_WHATSAPP_LINK : '') || '';
   },
 
   setWhatsappGroupLink(url) {
-    if (url) {
-      localStorage.setItem('bg_whatsapp_group_link', url.trim());
+    const cleanUrl = url ? url.trim() : '';
+    if (cleanUrl) {
+      localStorage.setItem('bg_whatsapp_group_link', cleanUrl);
     } else {
       localStorage.removeItem('bg_whatsapp_group_link');
+    }
+
+    // Sincronizar en el perfil de amigos para que viaje por Google Sheets a todos los teléfonos
+    const friends = db.getFriends();
+    const admin = friends.find(f => f.role === 'admin' || f.id === 'u1') || friends[0];
+    if (admin) {
+      admin.whatsappGroupLink = cleanUrl;
+      db.saveFriends(friends);
     }
   },
 
@@ -3286,7 +3501,7 @@ const app = {
                   <div class="min-w-0">
                     <span class="text-[9px] font-black uppercase text-amber-700 tracking-wider">🏆 Victoria Registrada</span>
                     <div class="flex items-center gap-1.5 text-xs font-black text-amber-950 truncate">
-                      ${getMeepleSvg(winnerFriend ? winnerFriend.color : 'bg-amber-500', 16)}
+                      ${getMeepleSvg(winnerFriend || 'bg-amber-500', 16)}
                       <span class="truncate">${winnerFriend ? winnerFriend.name : 'Ganador'}</span>
                     </div>
                     ${session.resultNotes ? `<p class="text-[10px] text-amber-800 italic truncate mt-0.5">"${session.resultNotes}"</p>` : ''}
@@ -3335,7 +3550,7 @@ const app = {
                   if (!f) return '';
                   return `
                     <span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded-full text-[11px] font-bold">
-                      ${getMeepleSvg(f.color, 14)}
+                      ${getMeepleSvg(f, 14)}
                       <span>${f.name.split(' ')[0]}</span>
                     </span>
                   `;
@@ -3346,7 +3561,7 @@ const app = {
                   if (!f) return '';
                   return `
                     <span class="inline-flex items-center gap-1.5 bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
-                      ${getMeepleSvg(f.color, 14)}
+                      ${getMeepleSvg(f, 14)}
                       <span>${f.name.split(' ')[0]} (?)</span>
                     </span>
                   `;
@@ -4004,7 +4219,7 @@ const app = {
           <label class="p-2.5 rounded-2xl border ${isSelected ? 'border-amber-500 bg-amber-50/70 ring-2 ring-amber-300' : 'border-slate-200 bg-white hover:border-amber-300'} cursor-pointer flex items-center gap-2.5 transition-all">
             <input type="radio" name="session-winner-choice" value="${f.id}" ${isSelected ? 'checked' : ''} class="sr-only" onchange="app.highlightWinnerRadio(this)">
             <div class="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-              ${getMeepleSvg(f.color, 20)}
+              ${getMeepleSvg(f, 20)}
             </div>
             <div class="min-w-0 flex-1">
               <div class="font-extrabold text-xs text-slate-900 truncate">${f.name}</div>
@@ -4370,34 +4585,27 @@ const app = {
   },
 
   /* FRIENDS */
-  populateFriendColorSelect(selectedColor = null, currentFriendId = null) {
+  populateFriendColorSelect(selectedFigureOrColor = null, currentFriendId = null) {
     const select = document.getElementById('friend-color');
     if (!select) return;
     const friends = db.getFriends();
 
-    const emojiMap = {
-      'Rojo': '🔴', 'Azul': '🔵', 'Verde': '🟢', 'Amarillo': '🟡',
-      'Morado': '🟣', 'Naranja': '🟠', 'Negro': '⚫', 'Cian': '💎',
-      'Rosa': '🌸', 'Teal': '🌊', 'Café': '🟤', 'Gris': '⚪'
-    };
-
-    select.innerHTML = MEEPLE_COLORS.map(mc => {
-      const takenFriend = friends.find(f => f.id !== currentFriendId && f.color === mc.id);
-      const isSelected = selectedColor ? mc.id === selectedColor : false;
-      const emoji = emojiMap[mc.name] || '🎲';
+    select.innerHTML = BOARD_GAME_FIGURES.map(fig => {
+      const takenFriend = friends.find(f => f.id !== currentFriendId && (f.figure === fig.id || f.color === fig.color));
+      const isSelected = selectedFigureOrColor ? (fig.id === selectedFigureOrColor || fig.color === selectedFigureOrColor) : false;
 
       if (takenFriend) {
-        return `<option value="${mc.id}" disabled class="text-slate-400 bg-slate-100">${emoji} Meeple ${mc.name} (En uso por ${takenFriend.name.split(' ')[0]})</option>`;
+        return `<option value="${fig.id}" disabled class="text-slate-400 bg-slate-100">${fig.name} (En uso por ${takenFriend.name.split(' ')[0]})</option>`;
       }
-      return `<option value="${mc.id}" ${isSelected ? 'selected' : ''}>${emoji} Meeple ${mc.name}</option>`;
+      return `<option value="${fig.id}" ${isSelected ? 'selected' : ''}>${fig.name}</option>`;
     }).join('');
 
-    const isCurrentColorTaken = friends.some(f => f.id !== currentFriendId && f.color === selectedColor);
-    if (!selectedColor || isCurrentColorTaken) {
-      const firstAvailable = MEEPLE_COLORS.find(mc => !friends.some(f => f.id !== currentFriendId && f.color === mc.id));
+    const isCurrentTaken = friends.some(f => f.id !== currentFriendId && (f.figure === selectedFigureOrColor || f.color === selectedFigureOrColor));
+    if (!selectedFigureOrColor || isCurrentTaken) {
+      const firstAvailable = BOARD_GAME_FIGURES.find(fig => !friends.some(f => f.id !== currentFriendId && (f.figure === fig.id || f.color === fig.color)));
       if (firstAvailable) select.value = firstAvailable.id;
     } else {
-      select.value = selectedColor;
+      select.value = selectedFigureOrColor;
     }
   },
 
@@ -4457,7 +4665,7 @@ const app = {
             <!-- 2nd Place -->
             <div class="bg-white/15 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center text-center">
               <span class="text-xs font-black text-slate-200">🥈 2º</span>
-              <div class="my-1.5">${top2 ? getMeepleSvg(top2.color, 24) : '—'}</div>
+              <div class="my-1.5">${top2 ? getMeepleSvg(top2, 24) : '—'}</div>
               <div class="font-extrabold text-xs truncate w-full">${top2 ? top2.name.split(' ')[0] : '—'}</div>
               <div class="text-[10px] text-amber-200 font-bold">${top2 ? `${top2.wins} vict.` : '0'}</div>
             </div>
@@ -4466,7 +4674,7 @@ const app = {
             <div class="bg-white/25 backdrop-blur-md rounded-2xl p-3 flex flex-col items-center text-center -translate-y-1 ring-2 ring-amber-300 shadow-md">
               <div class="text-amber-200 text-sm leading-none mb-0.5"><i class="fa-solid fa-crown animate-pulse"></i></div>
               <span class="text-xs font-black text-amber-100">🥇 1º</span>
-              <div class="my-1.5 scale-110">${top1 ? getMeepleSvg(top1.color, 28) : '—'}</div>
+              <div class="my-1.5 scale-110">${top1 ? getMeepleSvg(top1, 28) : '—'}</div>
               <div class="font-black text-xs truncate w-full">${top1 ? top1.name.split(' ')[0] : '—'}</div>
               <div class="text-[11px] text-amber-100 font-black">${top1 ? `${top1.wins} victorias` : '0'}</div>
             </div>
@@ -4474,7 +4682,7 @@ const app = {
             <!-- 3rd Place -->
             <div class="bg-white/15 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center text-center">
               <span class="text-xs font-black text-amber-200/90">🥉 3º</span>
-              <div class="my-1.5">${top3 ? getMeepleSvg(top3.color, 24) : '—'}</div>
+              <div class="my-1.5">${top3 ? getMeepleSvg(top3, 24) : '—'}</div>
               <div class="font-extrabold text-xs truncate w-full">${top3 ? top3.name.split(' ')[0] : '—'}</div>
               <div class="text-[10px] text-amber-200 font-bold">${top3 ? `${top3.wins} vict.` : '0'}</div>
             </div>
@@ -4490,7 +4698,7 @@ const app = {
         <div class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs flex items-center justify-between gap-3">
           <div class="flex items-center gap-3 min-w-0 flex-1">
             <div class="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-200 shadow-2xs flex items-center justify-center shrink-0">
-              ${getMeepleSvg(f.color, 24)}
+              ${getMeepleSvg(f, 24)}
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5">
@@ -4575,16 +4783,17 @@ const app = {
     event.preventDefault();
     const id = document.getElementById('friend-id').value.trim();
     const name = document.getElementById('friend-name').value.trim();
-    const color = document.getElementById('friend-color').value;
+    const figId = document.getElementById('friend-color').value;
+    const figObj = getFigure(figId);
     const phone = (document.getElementById('friend-phone')?.value || '').trim();
 
     if (!name) return;
 
     const friends = db.getFriends();
-    const isTaken = friends.some(f => f.id !== id && f.color === color);
+    const isTaken = friends.some(f => f.id !== id && (f.figure === figObj.id || f.color === figObj.color));
     if (isTaken) {
-      const takenBy = friends.find(f => f.id !== id && f.color === color);
-      alert(`⚠️ El color de Meeple seleccionado ya está en uso por ${takenBy ? takenBy.name : 'otro amigo'}.\n\nCada jugador del club debe tener un color exclusivo.`);
+      const takenBy = friends.find(f => f.id !== id && (f.figure === figObj.id || f.color === figObj.color));
+      alert(`⚠️ La figura "${figObj.name}" ya está en uso por ${takenBy ? takenBy.name : 'otro amigo'}.\n\nCada jugador del club debe tener una figura exclusiva.`);
       return;
     }
 
@@ -4597,7 +4806,8 @@ const app = {
       const idx = friends.findIndex(f => f.id === id);
       if (idx !== -1) {
         friends[idx].name = name;
-        friends[idx].color = color;
+        friends[idx].figure = figObj.id;
+        friends[idx].color = figObj.color;
         friends[idx].initials = initials;
         friends[idx].phone = phone;
       }
@@ -4605,7 +4815,8 @@ const app = {
       const newFriend = {
         id: 'u_' + Date.now(),
         name,
-        color,
+        figure: figObj.id,
+        color: figObj.color,
         initials,
         phone,
         pin: '1234',
