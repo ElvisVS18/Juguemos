@@ -1381,11 +1381,7 @@ const app = {
   },
 
   getShareUrl() {
-    if (window.location && window.location.hostname && window.location.hostname.includes('github.io')) {
-      return 'https://elvisvs18.github.io/Juguemos/';
-    }
-    let base = window.location.href.split('?')[0].split('#')[0];
-    return base;
+    return 'https://elvisvs18.github.io/Juguemos/';
   },
 
   updateDbStatusUi() {
@@ -1569,6 +1565,9 @@ const app = {
 
     if (updated) {
       db.saveGames(games);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
     }
   },
 
@@ -2696,6 +2695,9 @@ const app = {
       });
       if (updated) {
         db.saveGames(games);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
       }
     } catch (e) {
       console.warn('repairGameCoverInDb error:', e);
@@ -2841,10 +2843,10 @@ const app = {
     if (!game) return false;
     if (game.createdAt) {
       const d = new Date(game.createdAt).getTime();
-      if (!isNaN(d) && (Date.now() - d) < (14 * 24 * 60 * 60 * 1000)) return true;
+      if (!isNaN(d) && (Date.now() - d) < (21 * 24 * 60 * 60 * 1000)) return true;
     } else if (game.id && game.id.startsWith('g_')) {
       const ts = parseInt(game.id.replace('g_', ''));
-      if (!isNaN(ts) && ts > 1700000000000 && (Date.now() - ts) < (14 * 24 * 60 * 60 * 1000)) {
+      if (!isNaN(ts) && ts > 1700000000000 && (Date.now() - ts) < (21 * 24 * 60 * 60 * 1000)) {
         return true;
       }
     }
@@ -4834,6 +4836,9 @@ const app = {
     } catch(e) {}
 
     db.saveGames(games);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
 
     this.closeModal('modal-game');
     document.getElementById('form-new-game').reset();
