@@ -793,13 +793,19 @@ const db = {
       try { deleted = JSON.parse(localStorage.getItem('bg_deleted_games') || '[]'); } catch (e) {}
       return games
         .filter(g => g && !deleted.includes(g.id) && !deleted.includes((g.title || '').trim().toLowerCase()))
-        .map(g => ({
-          ...g,
-          minPlayers: parseInt(g.minPlayers) || 2,
-          maxPlayers: parseInt(g.maxPlayers) || 4,
-          durationMin: parseInt(g.durationMin) || 60,
-          image: getSafeImageUrl(g.image)
-        }));
+        .map(g => {
+          let maxP = parseInt(g.maxPlayers) || 4;
+          if (g.title && /brass/i.test(g.title) && maxP < 4) {
+            maxP = 4;
+          }
+          return {
+            ...g,
+            minPlayers: parseInt(g.minPlayers) || 2,
+            maxPlayers: maxP,
+            durationMin: parseInt(g.durationMin) || 60,
+            image: getSafeImageUrl(g.image)
+          };
+        });
     } catch (e) {
       return [];
     }
@@ -815,6 +821,7 @@ const db = {
       if (!Array.isArray(sessions)) sessions = DEFAULT_SESSIONS;
       let deleted = [];
       try { deleted = JSON.parse(localStorage.getItem('bg_deleted_sessions') || '[]'); } catch (e) {}
+      const friends = this.getFriends() || [];
       return sessions
         .filter(s => s && !deleted.includes(s.id))
         .map(s => {
@@ -823,10 +830,23 @@ const db = {
             try { att = JSON.parse(att); } catch (e) { att = []; }
           }
           if (!Array.isArray(att)) att = [];
+
+          // Sanitizar y deduplicar asistentes eliminando duplicados por friendId y fantasmas
+          const cleanAtt = [];
+          const seen = new Set();
+          att.forEach(a => {
+            if (a && a.friendId && (!friends.length || friends.some(fr => fr.id === a.friendId))) {
+              if (!seen.has(a.friendId)) {
+                seen.add(a.friendId);
+                cleanAtt.push(a);
+              }
+            }
+          });
+
           return {
             ...s,
             date: (s.date || '').split('T')[0],
-            attendees: att
+            attendees: cleanAtt
           };
         });
     } catch (e) {
@@ -1551,6 +1571,14 @@ const app = {
         }
         if (!g.description || g.description.length < 30) {
           g.description = match.description;
+          updated = true;
+        }
+        if (match.maxPlayers && (!g.maxPlayers || g.maxPlayers < match.maxPlayers)) {
+          g.maxPlayers = match.maxPlayers;
+          updated = true;
+        }
+        if (match.minPlayers && !g.minPlayers) {
+          g.minPlayers = match.minPlayers;
           updated = true;
         }
       } else if (g.image) {
@@ -3576,6 +3604,58 @@ const app = {
   },
 
   /* SESSIONS / FECHAS */
+  getSessionAttendeeStats(session) {
+    const games = db.getGames();
+    const friends = db.getFriends() || [];
+    let game = games.find(g => g.id === session?.gameId) || {
+      title: 'Juego de mesa',
+      minPlayers: 2,
+      maxPlayers: 4,
+      durationMin: 60,
+      image: 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?auto=format&fit=crop&w=600&q=80'
+    };
+
+    let maxPlayers = parseInt(game?.maxPlayers) || 4;
+    if (game?.title && /brass/i.test(game.title) && maxPlayers < 4) {
+      maxPlayers = 4;
+    }
+
+    const rawAttendees = Array.isArray(session?.attendees) ? session.attendees : [];
+
+    // Filtrar ÚNICAMENTE asistentes registrados en el club y deduplicar por friendId
+    const confirmed = [];
+    const maybe = [];
+    const attendees = [];
+    const seen = new Set();
+
+    rawAttendees.forEach(a => {
+      if (!a || !a.friendId) return;
+      if (!friends.some(fr => fr.id === a.friendId)) return; // descarta fantasmas o demo data
+      if (seen.has(a.friendId)) return; // descarta duplicados
+      seen.add(a.friendId);
+
+      attendees.push(a);
+      if (a.status === 'yes') {
+        confirmed.push(a);
+      } else if (a.status === 'maybe') {
+        maybe.push(a);
+      }
+    });
+
+    const spotsLeft = Math.max(0, maxPlayers - confirmed.length);
+    const isFull = spotsLeft <= 0;
+
+    return {
+      game,
+      maxPlayers,
+      attendees,
+      confirmed,
+      maybe,
+      spotsLeft,
+      isFull
+    };
+  },
+
   renderSessions() {
     const sessions = db.getSessions();
     const games = db.getGames();
@@ -3597,21 +3677,13 @@ const app = {
     }
 
     container.innerHTML = sessions.map(session => {
-      const game = games.find(g => g.id === session.gameId) || {
-        title: 'Juego de mesa',
-        minPlayers: 2,
-        maxPlayers: 4,
-        durationMin: 60,
-        image: 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?auto=format&fit=crop&w=600&q=80'
-      };
-
-      // Filtrar ÚNICAMENTE asistentes registrados en el club (elimina fantasmas o demo data)
-      const rawAttendees = Array.isArray(session.attendees) ? session.attendees : [];
-      const attendees = rawAttendees.filter(a => friends.some(fr => fr.id === a.friendId));
-      const confirmed = attendees.filter(a => a.status === 'yes');
-      const maybe = attendees.filter(a => a.status === 'maybe');
-      const spotsLeft = (game.maxPlayers || 4) - confirmed.length;
-      const isFull = spotsLeft <= 0;
+      const stats = this.getSessionAttendeeStats(session);
+      const game = stats.game;
+      const attendees = stats.attendees;
+      const confirmed = stats.confirmed;
+      const maybe = stats.maybe;
+      const spotsLeft = stats.spotsLeft;
+      const isFull = stats.isFull;
       const myRsvp = attendees.find(a => a.friendId === this.currentUserId)?.status || 'none';
 
       const todayStr = new Date().toISOString().split('T')[0];
@@ -3992,12 +4064,12 @@ const app = {
     const session = sessions.find(s => s.id === sessionId);
     if (!session) return;
 
-    const game = db.getGames().find(g => g.id === session.gameId);
-    const attendees = Array.isArray(session.attendees) ? session.attendees : [];
-    const confirmedCount = attendees.filter(a => a.status === 'yes' && a.friendId !== this.currentUserId).length;
+    const stats = this.getSessionAttendeeStats(session);
+    const game = stats.game;
+    const confirmedCount = stats.confirmed.filter(a => a.friendId !== this.currentUserId).length;
 
-    if (status === 'yes' && game && confirmedCount >= game.maxPlayers) {
-      alert(`¡Mesa llena! ${game.title} solo admite ${game.maxPlayers} jugadores. Puedes marcarte como 'Quizás' por si alguien cancela.`);
+    if (status === 'yes' && confirmedCount >= stats.maxPlayers) {
+      alert(`¡Mesa llena! ${game?.title || 'El juego'} solo admite ${stats.maxPlayers} jugadores. Puedes marcarte como 'Quizás' por si alguien cancela.`);
       return;
     }
 
@@ -4058,11 +4130,12 @@ const app = {
   shareToWhatsapp(sessionId) {
     const session = db.getSessions().find(s => s.id === sessionId);
     if (!session) return;
-    const game = db.getGames().find(g => g.id === session.gameId);
+    const stats = this.getSessionAttendeeStats(session);
+    const game = stats.game;
+    const confirmed = stats.confirmed;
+    const spotsLeft = stats.spotsLeft;
+    const maxPlayers = stats.maxPlayers;
     const friends = db.getFriends();
-    const attendees = Array.isArray(session.attendees) ? session.attendees : [];
-    const confirmed = attendees.filter(a => a.status === 'yes');
-    const spotsLeft = (game?.maxPlayers || 4) - confirmed.length;
     const shareUrl = this.getShareUrl();
 
     let cleanTime = session.time || '19:30';
@@ -4079,6 +4152,8 @@ const app = {
       .filter(Boolean)
       .join(', ');
 
+    const spotsText = spotsLeft === 1 ? '¡Queda 1 libre!' : spotsLeft > 1 ? `¡Quedan ${spotsLeft} libres!` : '¡Mesa llena!';
+
     const lines = [
       '🎲 *¡NUEVA PARTIDA EN EL CLUB!* 🎲',
       '',
@@ -4087,7 +4162,7 @@ const app = {
       `📅 Fecha: ${session.date}`,
       `⏰ Hora: ${cleanTime} hrs`,
       `📍 Lugar: ${session.location}`,
-      `👥 Cupos: ${confirmed.length}/${game?.maxPlayers || 4} ${spotsLeft > 0 ? `(¡Quedan ${spotsLeft} libres!)` : '(¡Mesa llena!)'}`,
+      `👥 Cupos: ${confirmed.length}/${maxPlayers} (${spotsText})`,
       confirmedNames ? `🙋‍♂️ Confirmados: ${confirmedNames}` : '',
       session.notes ? `💬 Nota: "${session.notes}"` : '',
       '',
@@ -4236,10 +4311,9 @@ const app = {
     this.currentInviteSessionId = sessionId;
     const session = db.getSessions().find(s => s.id === sessionId);
     if (!session) return;
-    const game = db.getGames().find(g => g.id === session.gameId);
-    const attendees = Array.isArray(session.attendees) ? session.attendees : [];
-    const confirmed = attendees.filter(a => a.status === 'yes');
-    const spotsLeft = Math.max(0, (game?.maxPlayers || 4) - confirmed.length);
+    const stats = this.getSessionAttendeeStats(session);
+    const game = stats.game;
+    const spotsLeft = stats.spotsLeft;
 
     let cleanTime = session.time || '19:30';
     if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
@@ -4247,6 +4321,7 @@ const app = {
     const banner = document.getElementById('private-invite-session-info');
     if (banner) {
       const coverUrl = getSafeImageUrl(game?.image);
+      const spotsText = spotsLeft === 1 ? '1 cupo libre' : spotsLeft > 1 ? `${spotsLeft} cupos libres` : 'Mesa llena';
       banner.innerHTML = `
         <div class="w-11 h-13 rounded-xl overflow-hidden bg-slate-900 shrink-0 shadow-2xs border border-indigo-200">
           ${coverUrl ? `<img src="${coverUrl}" alt="${game?.title || ''}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-indigo-400"><i class="fa-solid fa-dice-d20"></i></div>`}
@@ -4254,7 +4329,7 @@ const app = {
         <div class="min-w-0 flex-1">
           <div class="text-[9px] font-black uppercase tracking-wider text-indigo-700">Partida Programada</div>
           <h4 class="font-black text-xs text-slate-900 truncate mt-0.5">${game?.title || 'Juego de mesa'}</h4>
-          <p class="text-[10px] text-slate-500 font-medium">${session.date} • ${cleanTime} hrs • <strong class="text-indigo-600">${spotsLeft} cupo${spotsLeft !== 1 ? 's' : ''} libre${spotsLeft !== 1 ? 's' : ''}</strong></p>
+          <p class="text-[10px] text-slate-500 font-medium">${session.date} • ${cleanTime} hrs • <strong class="text-indigo-600">${spotsText}</strong></p>
         </div>
       `;
     }
@@ -4353,7 +4428,6 @@ const app = {
   sendPrivateWhatsappInvite(sessionId, friendId) {
     const session = db.getSessions().find(s => s.id === sessionId);
     if (!session) return;
-    const game = db.getGames().find(g => g.id === session.gameId);
     const friend = db.getFriends().find(f => f.id === friendId);
     if (!friend) return;
 
@@ -4367,22 +4441,23 @@ const app = {
       cleanPhone = '51' + cleanPhone;
     }
 
-    const attendees = Array.isArray(session.attendees) ? session.attendees : [];
-    const confirmed = attendees.filter(a => a.status === 'yes');
-    const spotsLeft = Math.max(0, (game?.maxPlayers || 4) - confirmed.length);
+    const stats = this.getSessionAttendeeStats(session);
+    const game = stats.game;
+    const spotsLeft = stats.spotsLeft;
     const shareUrl = this.getShareUrl();
 
     let cleanTime = session.time || '19:30';
     if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
 
     const firstName = (friend.name || '').split(' ')[0] || 'Amigo';
+    const spotsText = spotsLeft === 1 ? 'Queda 1 lugar' : spotsLeft > 1 ? `Quedan ${spotsLeft} lugares` : 'Mesa llena';
 
     const msg = `🎲 *¡Hola ${firstName}!* 🎲%0A%0A` +
       `Se armó partida de *${game?.title || 'Juego de mesa'}* en el Club:%0A%0A` +
       `📅 *Fecha:* ${session.date}%0A` +
       `⏰ *Hora:* ${cleanTime} hrs%0A` +
       `📍 *Lugar:* ${session.location || 'Club'}%0A` +
-      `👥 *Cupos libres:* Quedan ${spotsLeft} lugar${spotsLeft !== 1 ? 'es' : ''}%0A` +
+      `👥 *Cupos libres:* ${spotsText}%0A` +
       (session.notes ? `💬 *Nota:* "${session.notes}"%0A%0A` : '%0A') +
       `¿Te sumas a la mesa? Aparta tu silla con 1 toque aquí:%0A${encodeURIComponent(shareUrl)}`;
 
