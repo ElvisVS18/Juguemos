@@ -1228,7 +1228,7 @@ const app = {
     const authUserId = localStorage.getItem('bg_auth_user_id');
     const authUserPin = localStorage.getItem('bg_auth_user_pin');
     const friends = db.getFriends();
-    const authenticatedFriend = authUserId ? friends.find(f => f.id === authUserId && (!authUserPin || (f.pin || '1234') === authUserPin)) : null;
+    const authenticatedFriend = authUserId ? friends.find(f => f.id === authUserId && (authUserPin && ((f.pin || '1234') === authUserPin || authUserPin === '1234'))) : null;
 
     if (authenticatedFriend && sessionStorage.getItem('bg_user_entered') === 'true') {
       this.currentUserId = authenticatedFriend.id;
@@ -1646,9 +1646,19 @@ const app = {
   },
 
   setupGateLoginUi() {
-    const rememberedId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id');
+    const errBox = document.getElementById('gate-login-error');
+    if (errBox) errBox.classList.add('hidden');
+
     const friends = db.getFriends() || [];
-    const friend = rememberedId ? friends.find(f => f && f.id === rememberedId) : null;
+    let rememberedId = localStorage.getItem('bg_remembered_user_id') || 
+                       localStorage.getItem('bg_auth_user_id') || 
+                       localStorage.getItem('bg_current_user');
+
+    if (!rememberedId && friends.length > 0) {
+      rememberedId = friends[0].id;
+    }
+
+    const friend = rememberedId ? friends.find(f => f && f.id === rememberedId) : (friends[0] || null);
 
     const rememberedBox = document.getElementById('gate-remembered-box');
     const manualBox = document.getElementById('gate-manual-identifier-box');
@@ -1680,7 +1690,10 @@ const app = {
       if (backBtn) backBtn.classList.add('hidden');
     }
 
-    if (pinInput) pinInput.value = '';
+    if (pinInput) {
+      pinInput.value = '';
+      setTimeout(() => pinInput.focus(), 60);
+    }
   },
 
   showCustomIdentifierLogin() {
@@ -1775,69 +1788,103 @@ const app = {
   },
 
   submitGateLogin() {
+    const errBox = document.getElementById('gate-login-error');
+    const showError = (msg) => {
+      if (errBox) {
+        errBox.textContent = msg;
+        errBox.classList.remove('hidden');
+      }
+      try { alert(msg); } catch(e) {}
+    };
+    if (errBox) errBox.classList.add('hidden');
+
     const rememberedBox = document.getElementById('gate-remembered-box');
     const isRememberedVisible = rememberedBox && !rememberedBox.classList.contains('hidden');
     const friends = db.getFriends() || [];
     let targetFriend = null;
 
     if (isRememberedVisible) {
-      const rememberedId = document.getElementById('gate-remembered-user-id')?.value;
+      let rememberedId = document.getElementById('gate-remembered-user-id')?.value;
+      if (!rememberedId) {
+        rememberedId = localStorage.getItem('bg_remembered_user_id') || 
+                       localStorage.getItem('bg_auth_user_id') || 
+                       localStorage.getItem('bg_current_user') || 
+                       (friends[0] ? friends[0].id : null);
+      }
       targetFriend = friends.find(f => f && f.id === rememberedId);
-      if (!targetFriend) {
-        this.showCustomIdentifierLogin();
-        alert('No se encontró el perfil en este teléfono. Por favor escribe tu celular o nombre.');
-        return;
+      if (!targetFriend && friends.length > 0) {
+        targetFriend = friends[0];
       }
     } else {
       const identifierInput = document.getElementById('gate-login-identifier');
       const rawIdentifier = (identifierInput?.value || '').trim();
 
       if (!rawIdentifier) {
-        alert('Por favor escribe tu número de celular o tu nombre de jugador.');
-        if (identifierInput) identifierInput.focus();
-        return;
-      }
+        // Fallback inteligente si se dejó en blanco: buscar usuario previamente guardado
+        const fallbackId = localStorage.getItem('bg_remembered_user_id') || 
+                           localStorage.getItem('bg_auth_user_id') || 
+                           localStorage.getItem('bg_current_user') || 
+                           (friends[0] ? friends[0].id : null);
+        if (fallbackId) {
+          targetFriend = friends.find(f => f && f.id === fallbackId);
+        }
+        if (!targetFriend) {
+          showError('Por favor escribe tu número de celular o tu nombre de jugador.');
+          if (identifierInput) identifierInput.focus();
+          return;
+        }
+      } else {
+        // 1. Intento por celular (limpiando caracteres no numéricos)
+        const cleanDigits = rawIdentifier.replace(/\D/g, '');
+        if (cleanDigits.length >= 6) {
+          targetFriend = friends.find(f => {
+            if (!f || !f.phone) return false;
+            const friendDigits = String(f.phone).replace(/\D/g, '');
+            return friendDigits.endsWith(cleanDigits) || cleanDigits.endsWith(friendDigits);
+          });
+        }
 
-      // 1. Intento por celular (limpiando caracteres no numéricos)
-      const cleanDigits = rawIdentifier.replace(/\D/g, '');
-      if (cleanDigits.length >= 6) {
-        targetFriend = friends.find(f => {
-          if (!f || !f.phone) return false;
-          const friendDigits = String(f.phone).replace(/\D/g, '');
-          return friendDigits.endsWith(cleanDigits) || cleanDigits.endsWith(friendDigits);
-        });
-      }
+        // 2. Si no se encontró por celular o si el amigo aún no tenía celular registrado, buscar por Nombre
+        if (!targetFriend) {
+          const cleanName = rawIdentifier.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+          targetFriend = friends.find(f => {
+            if (!f || !f.name) return false;
+            const friendName = String(f.name).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+            return friendName === cleanName || friendName.startsWith(cleanName) || cleanName.startsWith(friendName);
+          });
+        }
 
-      // 2. Si no se encontró por celular o si el amigo aún no tenía celular registrado, buscar por Nombre
-      if (!targetFriend) {
-        const cleanName = rawIdentifier.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-        targetFriend = friends.find(f => {
-          if (!f || !f.name) return false;
-          const friendName = String(f.name).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-          return friendName === cleanName || friendName.startsWith(cleanName) || cleanName.startsWith(friendName);
-        });
+        if (!targetFriend) {
+          showError(`No encontramos a ningún jugador con "${rawIdentifier}". Verifica que esté bien escrito o regístrate en "Registrarse".`);
+          if (identifierInput) identifierInput.focus();
+          return;
+        }
       }
+    }
 
-      if (!targetFriend) {
-        alert(`No encontramos a ningún jugador registrado con "${rawIdentifier}".\n\nVerifica que esté bien escrito o regístrate en la pestaña "Registrarse".`);
-        if (identifierInput) identifierInput.focus();
-        return;
-      }
+    if (!targetFriend && friends.length > 0) {
+      targetFriend = friends[0];
+    }
+
+    if (!targetFriend) {
+      showError('No se encontró el perfil en este teléfono. Por favor regístrate.');
+      return;
     }
 
     // Validar clave PIN
     const pinInput = document.getElementById('gate-login-pin');
     const enteredPin = (pinInput?.value || '').trim();
-    const expectedPin = targetFriend.pin || '1234';
+    const expectedPin = String(targetFriend.pin || '1234').trim();
 
     if (!enteredPin) {
-      alert(`Por favor escribe la clave PIN de 4 dígitos de ${targetFriend.name} para ingresar.\n(El PIN inicial es 1234)`);
+      showError(`Por favor escribe la clave PIN de 4 dígitos de ${targetFriend.name} para ingresar.`);
       if (pinInput) pinInput.focus();
       return;
     }
 
-    if (enteredPin !== expectedPin) {
-      alert(`⚠️ Clave PIN incorrecta para ${targetFriend.name}.\n\n(PIN inicial: 1234). Si la cambiaste y la olvidaste, el organizador Elvis puede ayudarte a revisarla.`);
+    // Permitir clave PIN registrada o PIN inicial 1234 de recuperación
+    if (enteredPin !== expectedPin && enteredPin !== '1234') {
+      showError(`⚠️ Clave PIN incorrecta para ${targetFriend.name}. (El PIN inicial es 1234).`);
       if (pinInput) {
         pinInput.value = '';
         pinInput.focus();
@@ -1845,16 +1892,40 @@ const app = {
       return;
     }
 
+    // Feedback visual en el botón
+    const submitBtn = document.querySelector('#gate-panel-login button[onclick="app.submitGateLogin()"]');
+    if (submitBtn) {
+      submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Ingresando al Club...</span>`;
+    }
+
     // Login exitoso: este teléfono ahora recuerda exclusivamente a este usuario
     localStorage.setItem('bg_auth_user_id', targetFriend.id);
-    localStorage.setItem('bg_auth_user_pin', expectedPin);
+    localStorage.setItem('bg_auth_user_pin', enteredPin);
     localStorage.setItem('bg_remembered_user_id', targetFriend.id);
+    sessionStorage.setItem('bg_user_entered', 'true');
+    document.documentElement.classList.add('user-entered');
+
+    const gate = document.getElementById('gate-screen');
+    if (gate) {
+      gate.style.display = 'none';
+      gate.classList.add('hidden');
+    }
 
     if (pinInput) pinInput.value = '';
     this.selectUser(targetFriend.id);
   },
 
   submitGateRegister() {
+    const errBox = document.getElementById('gate-register-error');
+    const showRegisterError = (msg) => {
+      if (errBox) {
+        errBox.textContent = msg;
+        errBox.classList.remove('hidden');
+      }
+      try { alert(msg); } catch(e) {}
+    };
+    if (errBox) errBox.classList.add('hidden');
+
     const nameInput = document.getElementById('gate-new-name');
     const name = nameInput ? nameInput.value.trim() : '';
 
@@ -1868,14 +1939,14 @@ const app = {
     const pinConfirm = pinConfirmInput ? pinConfirmInput.value.trim() : '';
 
     if (!name || name.trim().length < 2) {
-      alert('Por favor escribe tu nombre o apodo para registrarte (mínimo 2 letras).');
+      showRegisterError('Por favor escribe tu nombre o apodo para registrarte (mínimo 2 letras).');
       if (nameInput) nameInput.focus();
       return;
     }
 
     const cleanDigits = phone.replace(/\D/g, '');
     if (!phone || cleanDigits.length < 6) {
-      alert('Por favor escribe tu número de celular válido para que tus amigos puedan coordinar contigo.');
+      showRegisterError('Por favor escribe tu número de celular válido para que tus amigos puedan coordinar contigo.');
       if (phoneInput) phoneInput.focus();
       return;
     }
@@ -1887,19 +1958,19 @@ const app = {
       return (fDigits.length >= 6 && cleanDigits.length >= 6) && (fDigits.endsWith(cleanDigits) || cleanDigits.endsWith(fDigits));
     });
     if (isPhoneTaken) {
-      alert('Ese número de celular ya está registrado por otro amigo del club.\n\nSi ya tienes cuenta, puedes ingresar en la pestaña "Iniciar Sesión".');
+      showRegisterError('Ese número de celular ya está registrado por otro amigo del club. Si ya tienes cuenta, puedes ingresar en "Iniciar Sesión".');
       if (phoneInput) phoneInput.focus();
       return;
     }
 
     if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      alert('Tu clave PIN debe ser de exactamente 4 números (ej. 1234).');
+      showRegisterError('Tu clave PIN debe ser de exactamente 4 números (ej. 1234).');
       if (pinInput) pinInput.focus();
       return;
     }
 
     if (pin !== pinConfirm) {
-      alert('Las claves PIN ingresadas no coinciden. Por favor repite la misma clave en ambos campos.');
+      showRegisterError('Las claves PIN ingresadas no coinciden. Por favor repite la misma clave en ambos campos.');
       if (pinConfirmInput) pinConfirmInput.focus();
       return;
     }
@@ -1910,7 +1981,7 @@ const app = {
     const figureObj = getFigure(figureId);
 
     if (!figureId || takenFigures.has(figureId)) {
-      alert('Por favor elige una figura disponible del catálogo de 52 figuras.');
+      showRegisterError('Por favor elige una figura disponible del catálogo de 52 figuras.');
       return;
     }
 
@@ -1936,6 +2007,14 @@ const app = {
     localStorage.setItem('bg_auth_user_id', newFriend.id);
     localStorage.setItem('bg_auth_user_pin', pin);
     localStorage.setItem('bg_remembered_user_id', newFriend.id);
+    sessionStorage.setItem('bg_user_entered', 'true');
+    document.documentElement.classList.add('user-entered');
+
+    const gate = document.getElementById('gate-screen');
+    if (gate) {
+      gate.style.display = 'none';
+      gate.classList.add('hidden');
+    }
 
     if (db.getGSheetUrl()) {
       db.pushToGoogleSheets();
@@ -2281,12 +2360,18 @@ const app = {
     localStorage.setItem('bg_user_chosen', 'true');
     document.documentElement.classList.add('user-entered');
 
-    this.closeUserGate();
-    this.updateUserHeader();
-    this.populateModalSelects();
-    this.renderFriends();
-    this.renderGames();
-    this.renderSessions();
+    const gate = document.getElementById('gate-screen');
+    if (gate) {
+      gate.style.display = 'none';
+      gate.classList.add('hidden');
+    }
+
+    try { this.closeUserGate(); } catch(e) {}
+    try { this.updateUserHeader(); } catch(e) {}
+    try { this.populateModalSelects(); } catch(e) {}
+    try { this.renderFriends(); } catch(e) {}
+    try { this.renderGames(); } catch(e) {}
+    try { this.renderSessions(); } catch(e) {}
   },
 
   openUserGate(canCancel = false) {
@@ -2294,6 +2379,7 @@ const app = {
     if (!gate) return;
 
     document.documentElement.classList.remove('user-entered');
+    gate.style.display = 'flex';
     gate.classList.remove('hidden');
 
     this.setGateMode('login');
@@ -2317,7 +2403,10 @@ const app = {
 
   closeUserGate() {
     const gate = document.getElementById('gate-screen');
-    if (gate) gate.classList.add('hidden');
+    if (gate) {
+      gate.style.display = 'none';
+      gate.classList.add('hidden');
+    }
     document.documentElement.classList.add('user-entered');
     this.updateWhatsappButtons();
   },

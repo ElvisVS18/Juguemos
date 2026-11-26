@@ -240,26 +240,29 @@
     // Fast zero-delay private login layout before first paint
     document.addEventListener('DOMContentLoaded', function() {
       try {
-        var remId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id');
+        var rawFriends = localStorage.getItem('bg_friends');
+        var friends = rawFriends ? JSON.parse(rawFriends) : [];
+        var remId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id') || localStorage.getItem('bg_current_user');
+        if (!remId && friends.length > 0) {
+          remId = friends[0].id;
+        }
+
         var remBox = document.getElementById('gate-remembered-box');
         var manBox = document.getElementById('gate-manual-identifier-box');
-        if (!remId) {
+
+        var f = remId ? friends.find(function(x) { return x && x.id === remId; }) : (friends[0] || null);
+        if (f) {
+          var nameEl = document.getElementById('gate-preview-name');
+          var phoneEl = document.getElementById('gate-preview-phone');
+          var idEl = document.getElementById('gate-remembered-user-id');
+          if (nameEl) nameEl.textContent = f.name;
+          if (phoneEl) phoneEl.textContent = (f.phone && f.phone.trim().length >= 6) ? ('📱 ' + f.phone) : '📱 Celular no registrado';
+          if (idEl) idEl.value = f.id;
+          if (remBox) remBox.classList.remove('hidden');
+          if (manBox) manBox.classList.add('hidden');
+        } else {
           if (remBox) remBox.classList.add('hidden');
           if (manBox) manBox.classList.remove('hidden');
-        } else {
-          var rawFriends = localStorage.getItem('bg_friends');
-          if (rawFriends) {
-            var friends = JSON.parse(rawFriends);
-            var f = friends.find(function(x) { return x && x.id === remId; });
-            if (f) {
-              var nameEl = document.getElementById('gate-preview-name');
-              var phoneEl = document.getElementById('gate-preview-phone');
-              var idEl = document.getElementById('gate-remembered-user-id');
-              if (nameEl) nameEl.textContent = f.name;
-              if (phoneEl) phoneEl.textContent = (f.phone && f.phone.trim().length >= 6) ? ('📱 ' + f.phone) : '📱 Celular no registrado';
-              if (idEl) idEl.value = f.id;
-            }
-          }
         }
       } catch(e) {}
     });
@@ -341,6 +344,9 @@
           <input type="password" id="gate-login-pin" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="••••" onkeydown="if(event.key==='Enter') app.submitGateLogin()" class="w-full border-2 border-brand-200 focus:border-brand-500 rounded-xl p-2.5 text-center text-lg font-black tracking-widest bg-white focus:outline-none">
         </div>
 
+        <!-- Mensaje de aviso/error visual -->
+        <div id="gate-login-error" class="hidden text-xs text-rose-600 font-bold text-center bg-rose-50 border border-rose-200 rounded-xl p-2.5 leading-snug"></div>
+
         <button type="button" onclick="app.submitGateLogin()" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]">
           <span>Ingresar al Club 🎲</span>
         </button>
@@ -385,6 +391,9 @@
             <input type="password" id="gate-new-pin-confirm" maxlength="4" placeholder="••••" inputmode="numeric" pattern="[0-9]*" onkeydown="if(event.key==='Enter') app.submitGateRegister()" class="w-full border-2 border-slate-200 focus:border-brand-500 rounded-xl px-2 py-2 text-center text-sm font-black tracking-widest bg-white focus:outline-none">
           </div>
         </div>
+
+        <!-- Mensaje de aviso/error visual registro -->
+        <div id="gate-register-error" class="hidden text-xs text-rose-600 font-bold text-center bg-rose-50 border border-rose-200 rounded-xl p-2.5 leading-snug"></div>
 
         <button type="button" onclick="app.submitGateRegister()" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]">
           <span>Crear Cuenta y Entrar 🚀</span>
@@ -441,8 +450,11 @@
 
         var rawFriends = localStorage.getItem('bg_friends');
         var friends = rawFriends ? JSON.parse(rawFriends) : [];
-        var rememberedId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id');
-        var curFriend = rememberedId && friends.length > 0 ? friends.find(function(f) { return f && f.id === rememberedId; }) : null;
+        var rememberedId = localStorage.getItem('bg_remembered_user_id') || localStorage.getItem('bg_auth_user_id') || localStorage.getItem('bg_current_user');
+        if (!rememberedId && friends.length > 0) {
+          rememberedId = friends[0].id;
+        }
+        var curFriend = rememberedId && friends.length > 0 ? friends.find(function(f) { return f && f.id === rememberedId; }) : (friends[0] || null);
 
         var remBox = document.getElementById('gate-remembered-box');
         var manBox = document.getElementById('gate-manual-identifier-box');
@@ -1376,6 +1388,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=53"></script>
+  <script src="app.js?v=54"></script>
 </body>
 </html>
