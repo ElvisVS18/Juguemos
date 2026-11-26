@@ -1690,7 +1690,84 @@ const app = {
       `;
     }
 
+    const adminLinkContainer = document.getElementById('admin-group-link-btn-container');
+    if (adminLinkContainer) {
+      if (isAdmin) {
+        adminLinkContainer.innerHTML = `
+          <button onclick="app.editWhatsappGroupLink()" class="w-full py-2 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-bold text-[11px] rounded-xl border border-indigo-200 flex items-center justify-center gap-2 transition-colors">
+            <i class="fa-solid fa-link text-indigo-600"></i>
+            <span>${this.getWhatsappGroupLink() ? 'Modificar Enlace del Grupo WhatsApp' : 'Configurar Enlace del Grupo WhatsApp'}</span>
+          </button>
+        `;
+      } else {
+        adminLinkContainer.innerHTML = '';
+      }
+    }
+
     this.openModal('modal-user-profile');
+  },
+
+  getWhatsappGroupLink() {
+    return localStorage.getItem('bg_whatsapp_group_link') || '';
+  },
+
+  setWhatsappGroupLink(url) {
+    if (url) {
+      localStorage.setItem('bg_whatsapp_group_link', url.trim());
+    } else {
+      localStorage.removeItem('bg_whatsapp_group_link');
+    }
+  },
+
+  joinWhatsappGroup() {
+    let link = this.getWhatsappGroupLink();
+    const friends = db.getFriends();
+    const me = friends.find(f => f.id === this.currentUserId);
+    const isAdmin = me && (me.role === 'admin' || me.id === 'u1');
+
+    if (!link) {
+      if (isAdmin) {
+        const newLink = prompt(
+          '👑 Como Administrador, pega aquí el enlace de invitación de tu Grupo de WhatsApp del Club:\n\n(Ejemplo: https://chat.whatsapp.com/ABC123xyz)',
+          ''
+        );
+        if (newLink && newLink.trim().startsWith('https://chat.whatsapp.com/')) {
+          this.setWhatsappGroupLink(newLink);
+          alert('¡Enlace del Grupo de WhatsApp guardado con éxito!\n\nAhora cualquier amigo que pulse este botón entrará directamente al grupo.');
+          window.open(newLink.trim(), '_blank');
+        } else if (newLink) {
+          alert('El enlace debe ser válido y comenzar con https://chat.whatsapp.com/');
+        }
+        return;
+      } else {
+        alert('El administrador aún no ha configurado el enlace del grupo de WhatsApp del club. Pídele al organizador Elvis que lo configure.');
+        return;
+      }
+    }
+
+    window.open(link, '_blank');
+  },
+
+  editWhatsappGroupLink() {
+    const current = this.getWhatsappGroupLink();
+    const newLink = prompt(
+      'Configurar Enlace de Invitación al Grupo de WhatsApp:\n\n(Cópialo en WhatsApp en "Enlace de invitación del grupo")',
+      current || 'https://chat.whatsapp.com/'
+    );
+    if (newLink !== null) {
+      const clean = newLink.trim();
+      if (clean && !clean.startsWith('https://chat.whatsapp.com/')) {
+        alert('El enlace debe comenzar con https://chat.whatsapp.com/');
+        return;
+      }
+      this.setWhatsappGroupLink(clean);
+      if (clean) {
+        alert('¡Enlace del grupo guardado con éxito!');
+      } else {
+        alert('Se ha borrado el enlace del grupo.');
+      }
+      this.openUserProfileModal();
+    }
   },
 
   promptChangePhone() {
@@ -3213,21 +3290,24 @@ const app = {
             ` : ''}
 
             <!-- Share & Creator Actions Row -->
-            <div class="flex items-center gap-2 pt-0.5">
-              <button onclick="app.shareToWhatsapp('${session.id}')" class="flex-1 py-2 rounded-xl text-[11px] font-bold text-emerald-700 bg-emerald-100/70 active:bg-emerald-200 flex items-center justify-center gap-1.5 transition-colors">
-                <i class="fa-brands fa-whatsapp text-sm"></i>
-                <span>Compartir en WhatsApp</span>
+            <div class="flex items-center gap-1.5 pt-0.5">
+              <button onclick="app.shareToWhatsapp('${session.id}')" class="flex-1 py-2 px-2 rounded-xl text-[11px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 active:bg-emerald-300 flex items-center justify-center gap-1 transition-colors" title="Publicar convocatoria en el grupo de avisos de WhatsApp">
+                <i class="fa-brands fa-whatsapp text-sm text-emerald-600"></i>
+                <span>Avisar Grupo</span>
+              </button>
+
+              <button onclick="app.openPrivateInviteModal('${session.id}')" class="flex-1 py-2 px-2 rounded-xl text-[11px] font-bold text-indigo-900 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 border border-indigo-200/80 flex items-center justify-center gap-1 transition-colors" title="Enviar WhatsApp privado a amigos específicos">
+                <i class="fa-solid fa-paper-plane text-[11px] text-indigo-600"></i>
+                <span>Por Privado</span>
               </button>
 
               ${canManage ? `
                 <button onclick="app.editSession('${session.id}')" class="px-2.5 py-2 rounded-xl text-[11px] font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 active:bg-brand-200 border border-brand-200 flex items-center justify-center gap-1 transition-colors" title="Modificar fecha, hora, lugar o juego">
                   <i class="fa-solid fa-pen-to-square text-[10px]"></i>
-                  <span>Modificar</span>
                 </button>
 
                 <button onclick="app.deleteSession('${session.id}')" class="px-2.5 py-2 rounded-xl text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200/80 flex items-center justify-center gap-1 transition-colors" title="Eliminar o cancelar esta partida">
                   <i class="fa-solid fa-trash-can text-[10px]"></i>
-                  <span>Eliminar</span>
                 </button>
               ` : ''}
             </div>
@@ -3429,18 +3509,36 @@ const app = {
     const session = db.getSessions().find(s => s.id === sessionId);
     if (!session) return;
     const game = db.getGames().find(g => g.id === session.gameId);
+    const friends = db.getFriends();
     const attendees = Array.isArray(session.attendees) ? session.attendees : [];
     const confirmed = attendees.filter(a => a.status === 'yes');
     const spotsLeft = (game?.maxPlayers || 4) - confirmed.length;
     const shareUrl = this.getShareUrl();
 
-    const msg = `🎲 *¡Noche de Juegos armada!* 🎲%0A%0A` +
-      `🕹️ *Juego:* ${game?.title || 'Juego de mesa'}%0A` +
-      `📅 *Fecha:* ${session.date} a las ${session.time} hrs%0A` +
+    let cleanTime = session.time || '19:30';
+    if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
+
+    const creatorId = session.creatorId || (session.attendees && session.attendees[0] ? session.attendees[0].friendId : null);
+    const creator = friends.find(f => f.id === creatorId);
+
+    const confirmedNames = confirmed
+      .map(att => {
+        const f = friends.find(fr => fr.id === att.friendId);
+        return f ? f.name.split(' ')[0] : null;
+      })
+      .filter(Boolean)
+      .join(', ');
+
+    const msg = `🎲 *¡NUEVA PARTIDA EN EL CLUB!* 🎲%0A%0A` +
+      `🔥 *Juego:* *${game?.title || 'Juego de mesa'}*%0A` +
+      (creator ? `👤 *Organiza:* ${creator.name}%0A` : '') +
+      `📅 *Fecha:* ${session.date}%0A` +
+      `⏰ *Hora:* ${cleanTime} hrs%0A` +
       `📍 *Lugar:* ${session.location}%0A` +
-      `👥 *Confirmados (${confirmed.length}/${game?.maxPlayers || 4}):* ${spotsLeft > 0 ? `(¡Quedan ${spotsLeft} cupos!)` : '(¡Mesa llena!)'}%0A` +
-      (session.notes ? `📝 *Nota:* ${session.notes}%0A%0A` : '%0A') +
-      `📲 *Confirma tu asistencia entrando aquí:*%0A${encodeURIComponent(shareUrl)}`;
+      `👥 *Cupos:* ${confirmed.length}/${game?.maxPlayers || 4} ${spotsLeft > 0 ? `(¡Quedan ${spotsLeft} libres!)` : '(¡Mesa llena!)'}%0A` +
+      (confirmedNames ? `🙋‍♂️ *Confirmados:* ${confirmedNames}%0A` : '') +
+      (session.notes ? `💬 *Nota:* "${session.notes}"%0A%0A` : '%0A') +
+      `📲 *¡Confirma si vas con 1 toque aquí!:*%0A${encodeURIComponent(shareUrl)}`;
 
     window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
   },
@@ -3500,6 +3598,8 @@ const app = {
       });
     }
 
+    let createdSessionId = null;
+
     if (editId) {
       // Modificar partida existente
       const session = sessions.find(s => s.id === editId);
@@ -3516,6 +3616,7 @@ const app = {
       if (!session.creatorId) {
         session.creatorId = this.currentUserId;
       }
+      createdSessionId = editId;
     } else {
       // Crear nueva partida
       const newSession = {
@@ -3531,6 +3632,7 @@ const app = {
         ]
       };
       sessions.unshift(newSession);
+      createdSessionId = newSession.id;
     }
 
     db.saveSessions(sessions);
@@ -3543,6 +3645,220 @@ const app = {
     const editIdInput = document.getElementById('session-edit-id');
     if (editIdInput) editIdInput.value = '';
     this.renderSessions();
+
+    // Notificación automática al terminar de crear o modificar la partida
+    if (!editId && createdSessionId) {
+      setTimeout(() => {
+        const toGroup = confirm(
+          '🎉 ¡Partida publicada con éxito en el Club!\n\n' +
+          '¿Deseas enviar la convocatoria ahora por WhatsApp?\n\n' +
+          '• Pulsa ACEPTAR para avisar al Grupo de Avisos.\n' +
+          '• Pulsa CANCELAR para elegir amigos e invitar por privado.'
+        );
+        if (toGroup) {
+          this.shareToWhatsapp(createdSessionId);
+        } else {
+          this.openPrivateInviteModal(createdSessionId);
+        }
+      }, 250);
+    } else if (editId && createdSessionId) {
+      setTimeout(() => {
+        if (confirm('✅ ¡Partida actualizada con éxito!\n\n¿Deseas avisar de los cambios en el grupo de WhatsApp?')) {
+          this.shareToWhatsapp(createdSessionId);
+        }
+      }, 250);
+    }
+  },
+
+  /* ======================================================== */
+  /* INVITACIONES PRIVADAS DIRECTAS (WHATSAPP POR AMIGO) */
+  /* ======================================================== */
+  currentInviteSessionId: null,
+  sentPrivateInvites: new Set(),
+
+  openPrivateInviteModal(sessionId) {
+    this.currentInviteSessionId = sessionId;
+    const session = db.getSessions().find(s => s.id === sessionId);
+    if (!session) return;
+    const game = db.getGames().find(g => g.id === session.gameId);
+    const attendees = Array.isArray(session.attendees) ? session.attendees : [];
+    const confirmed = attendees.filter(a => a.status === 'yes');
+    const spotsLeft = Math.max(0, (game?.maxPlayers || 4) - confirmed.length);
+
+    let cleanTime = session.time || '19:30';
+    if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
+
+    const banner = document.getElementById('private-invite-session-info');
+    if (banner) {
+      const coverUrl = getSafeImageUrl(game?.image);
+      banner.innerHTML = `
+        <div class="w-11 h-13 rounded-xl overflow-hidden bg-slate-900 shrink-0 shadow-2xs border border-indigo-200">
+          ${coverUrl ? `<img src="${coverUrl}" alt="${game?.title || ''}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-indigo-400"><i class="fa-solid fa-dice-d20"></i></div>`}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[9px] font-black uppercase tracking-wider text-indigo-700">Partida Programada</div>
+          <h4 class="font-black text-xs text-slate-900 truncate mt-0.5">${game?.title || 'Juego de mesa'}</h4>
+          <p class="text-[10px] text-slate-500 font-medium">${session.date} • ${cleanTime} hrs • <strong class="text-indigo-600">${spotsLeft} cupo${spotsLeft !== 1 ? 's' : ''} libre${spotsLeft !== 1 ? 's' : ''}</strong></p>
+        </div>
+      `;
+    }
+
+    const searchInput = document.getElementById('input-search-invite-friends');
+    if (searchInput) searchInput.value = '';
+
+    this.renderPrivateInviteFriendsList();
+    this.openModal('modal-private-invite');
+  },
+
+  filterPrivateInviteFriends() {
+    this.renderPrivateInviteFriendsList();
+  },
+
+  renderPrivateInviteFriendsList() {
+    const container = document.getElementById('private-invite-friends-list');
+    if (!container || !this.currentInviteSessionId) return;
+
+    const session = db.getSessions().find(s => s.id === this.currentInviteSessionId);
+    if (!session) return;
+
+    const friends = db.getFriends();
+    const query = (document.getElementById('input-search-invite-friends')?.value || '').toLowerCase().trim();
+    const attendees = Array.isArray(session.attendees) ? session.attendees : [];
+
+    // Filter out current logged in user
+    let candidates = friends.filter(f => f.id !== this.currentUserId);
+
+    if (query) {
+      candidates = candidates.filter(f => (f.name || '').toLowerCase().includes(query));
+    }
+
+    if (candidates.length === 0) {
+      container.innerHTML = `
+        <div class="p-6 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+          <i class="fa-solid fa-users text-2xl mb-1 text-slate-300"></i>
+          <p>No se encontraron amigos con ese nombre.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = candidates.map(f => {
+      const isConfirmed = attendees.some(a => a.friendId === f.id && a.status === 'yes');
+      const isMaybe = attendees.some(a => a.friendId === f.id && a.status === 'maybe');
+      const isSent = this.sentPrivateInvites.has(this.currentInviteSessionId + '_' + f.id);
+      const hasPhone = Boolean(f.phone && f.phone.trim().length >= 6);
+
+      return `
+        <div class="p-2.5 rounded-2xl border ${isSent ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200/90 bg-white hover:border-indigo-200'} flex items-center justify-between gap-2.5 transition-all">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+              ${getMeepleSvg(f.color, 18)}
+            </div>
+            <div class="min-w-0">
+              <div class="font-extrabold text-xs text-slate-900 truncate flex items-center gap-1.5">
+                <span>${f.name}</span>
+                ${isConfirmed ? `<span class="text-[9px] font-black text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-md">Ya va</span>` : isMaybe ? `<span class="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded-md">Quizás</span>` : ''}
+              </div>
+              <div class="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1 mt-0.5">
+                ${hasPhone 
+                  ? `<i class="fa-solid fa-phone text-[9px] text-emerald-600"></i> <span>${f.phone}</span>` 
+                  : `<span class="text-amber-600 font-bold"><i class="fa-solid fa-triangle-exclamation text-[9px]"></i> Sin celular</span>`}
+              </div>
+            </div>
+          </div>
+
+          <div class="shrink-0 flex items-center gap-1">
+            ${isConfirmed ? `
+              <span class="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 font-black text-[10px] rounded-xl border border-emerald-200 flex items-center gap-1">
+                <i class="fa-solid fa-circle-check text-emerald-600"></i> Confirmado
+              </span>
+            ` : isSent ? `
+              <button onclick="app.sendPrivateWhatsappInvite('${this.currentInviteSessionId}', '${f.id}')" class="px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold text-[10px] rounded-xl flex items-center gap-1 transition-colors" title="Volver a enviar">
+                <i class="fa-solid fa-check text-emerald-600"></i>
+                <span>Enviado</span>
+              </button>
+            ` : hasPhone ? `
+              <button onclick="app.sendPrivateWhatsappInvite('${this.currentInviteSessionId}', '${f.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-[11px] rounded-xl shadow-xs flex items-center gap-1.5 transition-all active:scale-95">
+                <i class="fa-brands fa-whatsapp text-xs"></i>
+                <span>Invitar</span>
+              </button>
+            ` : `
+              <button onclick="app.promptAddFriendPhone('${f.id}')" class="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-800 font-bold text-[10px] rounded-xl border border-amber-200 flex items-center gap-1 transition-colors" title="Registrar su celular">
+                <i class="fa-solid fa-plus text-[9px]"></i>
+                <span>Celular</span>
+              </button>
+            `}
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  sendPrivateWhatsappInvite(sessionId, friendId) {
+    const session = db.getSessions().find(s => s.id === sessionId);
+    if (!session) return;
+    const game = db.getGames().find(g => g.id === session.gameId);
+    const friend = db.getFriends().find(f => f.id === friendId);
+    if (!friend) return;
+
+    if (!friend.phone || friend.phone.trim().length < 6) {
+      this.promptAddFriendPhone(friendId);
+      return;
+    }
+
+    let cleanPhone = friend.phone.replace(/[\s\-\(\)\+]/g, '').trim();
+    if (cleanPhone.length === 9 && !cleanPhone.startsWith('51')) {
+      cleanPhone = '51' + cleanPhone;
+    }
+
+    const attendees = Array.isArray(session.attendees) ? session.attendees : [];
+    const confirmed = attendees.filter(a => a.status === 'yes');
+    const spotsLeft = Math.max(0, (game?.maxPlayers || 4) - confirmed.length);
+    const shareUrl = this.getShareUrl();
+
+    let cleanTime = session.time || '19:30';
+    if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
+
+    const firstName = (friend.name || '').split(' ')[0] || 'Amigo';
+
+    const msg = `🎲 *¡Hola ${firstName}!* 🎲%0A%0A` +
+      `Se armó partida de *${game?.title || 'Juego de mesa'}* en el Club:%0A%0A` +
+      `📅 *Fecha:* ${session.date}%0A` +
+      `⏰ *Hora:* ${cleanTime} hrs%0A` +
+      `📍 *Lugar:* ${session.location || 'Club'}%0A` +
+      `👥 *Cupos libres:* Quedan ${spotsLeft} lugar${spotsLeft !== 1 ? 'es' : ''}%0A` +
+      (session.notes ? `💬 *Nota:* "${session.notes}"%0A%0A` : '%0A') +
+      `¿Te sumas a la mesa? Aparta tu silla con 1 toque aquí:%0A${encodeURIComponent(shareUrl)}`;
+
+    this.sentPrivateInvites.add(sessionId + '_' + friendId);
+    this.renderPrivateInviteFriendsList();
+
+    window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`, '_blank');
+  },
+
+  promptAddFriendPhone(friendId) {
+    const friend = db.getFriends().find(f => f.id === friendId);
+    if (!friend) return;
+
+    const newPhone = prompt(
+      `Ingresa el celular / WhatsApp de ${friend.name}:\n(Incluye código de país si es de fuera, ej: +51 987654321):`,
+      friend.phone || ''
+    );
+
+    if (newPhone === null) return;
+    const clean = newPhone.trim();
+    if (!clean) return;
+
+    friend.phone = clean;
+    const friends = db.getFriends();
+    db.saveFriends(friends);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
+
+    this.renderPrivateInviteFriendsList();
+    this.renderFriends();
+    alert(`¡Celular de ${friend.name} guardado con éxito! Ahora puedes invitarle con 1 toque.`);
   },
 
   /* POST-SESSION RESULTS & WINNER RECORDING */

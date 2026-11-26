@@ -314,6 +314,10 @@
             <i class="fa-solid fa-hand-pointer text-amber-300"></i>
             <span>¿Quién empieza?</span>
           </button>
+          <button onclick="app.joinWhatsappGroup()" class="flex-1 sm:flex-none px-3.5 py-2.5 bg-emerald-500/25 hover:bg-emerald-500/35 active:bg-emerald-500/45 backdrop-blur-md text-emerald-100 font-bold text-xs rounded-xl border border-emerald-400/30 shadow active:scale-[0.98] transition-all flex items-center justify-center gap-1.5" title="Unirse al grupo de WhatsApp del Club">
+            <i class="fa-brands fa-whatsapp text-emerald-300 text-sm"></i>
+            <span>Grupo WhatsApp</span>
+          </button>
         </div>
       </div>
 
@@ -809,8 +813,13 @@
       </div>
 
       <div class="space-y-2 pt-1 text-xs">
-        <button onclick="app.promptChangePhone()" class="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold rounded-xl border border-emerald-200 flex items-center justify-center gap-2 transition-colors">
+        <button onclick="app.joinWhatsappGroup()" class="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold rounded-xl border border-emerald-200 flex items-center justify-center gap-2 transition-colors">
           <i class="fa-brands fa-whatsapp text-emerald-600"></i>
+          <span>Unirse al Grupo de WhatsApp del Club</span>
+        </button>
+
+        <button onclick="app.promptChangePhone()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-bold rounded-xl border border-slate-200 flex items-center justify-center gap-2 transition-colors">
+          <i class="fa-solid fa-phone text-brand-600"></i>
           <span>Actualizar mi Celular / WhatsApp</span>
         </button>
 
@@ -818,6 +827,10 @@
           <i class="fa-solid fa-key text-brand-600"></i>
           <span>Cambiar mi Clave PIN (4 dígitos)</span>
         </button>
+
+        <div id="admin-group-link-btn-container">
+          <!-- Rendered if admin: Configure WhatsApp Group Invite Link -->
+        </div>
 
         <button onclick="app.logoutUser()" class="w-full py-2.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 font-bold rounded-xl border border-rose-200 flex items-center justify-center gap-2 transition-colors">
           <i class="fa-solid fa-arrow-right-from-bracket text-rose-600"></i>
@@ -885,6 +898,54 @@
         <i class="fa-solid fa-rotate text-amber-200"></i>
         <span id="btn-spin-label">¡Girar Ruleta de la Suerte!</span>
       </button>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MOBILE BOTTOM SHEET MODAL: INVITAR AMIGOS POR PRIVADO (WHATSAPP) -->
+  <!-- ======================================================== -->
+  <div id="modal-private-invite" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeModal('modal-private-invite')" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl sm:m-auto sm:max-w-md w-full p-5 shadow-2xl animate-sheet space-y-3.5 max-h-[90vh] overflow-y-auto no-scrollbar">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <!-- Header -->
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center text-sm font-bold shadow-xs">
+            <i class="fa-solid fa-paper-plane"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-sm text-slate-900 leading-tight">Invitar Amigos por Privado</h3>
+            <p class="text-[10px] text-slate-500 font-medium">WhatsApp directo sin necesidad de tener el contacto guardado</p>
+          </div>
+        </div>
+        <button onclick="app.closeModal('modal-private-invite')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Partida Info Banner -->
+      <div id="private-invite-session-info" class="p-3 bg-gradient-to-r from-indigo-50 via-purple-50 to-brand-50 border border-indigo-100 rounded-2xl flex items-center gap-3">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Search Input -->
+      <div class="relative">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+        <input type="text" id="input-search-invite-friends" oninput="app.filterPrivateInviteFriends()" placeholder="Buscar amigo por nombre..." class="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium">
+      </div>
+
+      <!-- List of Friends -->
+      <div id="private-invite-friends-list" class="space-y-2 max-h-72 overflow-y-auto no-scrollbar pt-1">
+        <!-- Rendered dynamically by app.renderPrivateInviteFriendsList() -->
+      </div>
+
+      <!-- Bottom Tip -->
+      <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+        <i class="fa-solid fa-circle-info text-indigo-600 text-xs shrink-0"></i>
+        <span>Al pulsar <strong>Enviar</strong> se abrirá el chat con ese amigo y su mensaje personalizado. Al volver verás el check ✅.</span>
+      </div>
     </div>
   </div>
 
@@ -1001,6 +1062,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=39"></script>
+  <script src="app.js?v=42"></script>
 </body>
 </html>
