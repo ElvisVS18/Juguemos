@@ -1381,6 +1381,9 @@ const app = {
   },
 
   getShareUrl() {
+    if (window.location && window.location.hostname && window.location.hostname.includes('github.io')) {
+      return 'https://elvisvs18.github.io/Juguemos/';
+    }
     let base = window.location.href.split('?')[0].split('#')[0];
     return base;
   },
@@ -2834,6 +2837,20 @@ const app = {
     `;
   },
 
+  isGameRecent(game) {
+    if (!game) return false;
+    if (game.createdAt) {
+      const d = new Date(game.createdAt).getTime();
+      if (!isNaN(d) && (Date.now() - d) < (14 * 24 * 60 * 60 * 1000)) return true;
+    } else if (game.id && game.id.startsWith('g_')) {
+      const ts = parseInt(game.id.replace('g_', ''));
+      if (!isNaN(ts) && ts > 1700000000000 && (Date.now() - ts) < (14 * 24 * 60 * 60 * 1000)) {
+        return true;
+      }
+    }
+    return false;
+  },
+
   showGameDetail(gameId) {
     const games = db.getGames();
     const game = games.find(g => g.id === gameId);
@@ -2841,6 +2858,7 @@ const app = {
     const friends = db.getFriends();
     const owner = friends.find(f => f.id === game.ownerId) || { name: 'Comunitario' };
     const canEdit = this.canEditGame(game);
+    const isRecent = this.isGameRecent(game);
 
     const content = document.getElementById('game-detail-content');
     content.innerHTML = `
@@ -2850,7 +2868,10 @@ const app = {
           ${this.getGameCoverHtml(game, 'session')}
           <div class="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-transparent pointer-events-none"></div>
           <div class="absolute bottom-3 left-4 right-4 text-white pointer-events-none">
-            <span class="text-[10px] font-bold uppercase tracking-wider text-brand-300">Aportado por: ${owner.name}</span>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-brand-300">Aportado por: ${owner.name}</span>
+              ${isRecent ? '<span class="text-[9px] font-black bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1"><i class="fa-solid fa-sparkles text-[8px]"></i> ¡Recién llegado!</span>' : ''}
+            </div>
             <h2 class="text-xl font-black drop-shadow-sm leading-tight">${game.title}</h2>
           </div>
         </div>
@@ -2891,9 +2912,14 @@ const app = {
 
         <!-- Action Buttons -->
         <div class="space-y-2 pt-1">
-          <button onclick="app.quickScheduleFromDetail('${game.id}')" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2">
+          <button onclick="app.quickScheduleFromDetail('${game.id}')" class="w-full py-3 bg-brand-600 active:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]">
             <i class="fa-solid fa-calendar-plus"></i>
             <span>Programar Partida con este Juego</span>
+          </button>
+
+          <button onclick="app.shareNewGameToWhatsapp('${game.id}')" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+            <i class="fa-brands fa-whatsapp text-sm"></i>
+            <span>Compartir Ficha en WhatsApp del Club</span>
           </button>
 
           ${canEdit ? `
@@ -4579,6 +4605,33 @@ const app = {
     window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
   },
 
+  shareNewGameToWhatsapp(gameId) {
+    const games = db.getGames();
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+
+    const friends = db.getFriends();
+    const owner = friends.find(f => f.id === game.ownerId) || { name: 'Comunitario' };
+    const shareUrl = this.getShareUrl();
+
+    // Extracto limpio y conciso de la reseña (máximo 220 caracteres para que el mensaje no sea abrumador)
+    let reviewSnippet = (game.description || '').trim();
+    if (reviewSnippet.length > 220) {
+      reviewSnippet = reviewSnippet.substring(0, 220).trim() + '...';
+    }
+
+    const msg = `🎲✨ *¡NUEVO JUEGO EN LA LUDOTECA DEL CLUB!* ✨🎲%0A%0A` +
+      `🔥 *Juego:* *${game.title}*%0A` +
+      `👤 *Aportado por:* ${owner.name}%0A` +
+      `👥 *Jugadores:* ${game.minPlayers} - ${game.maxPlayers} jugadores%0A` +
+      `⏳ *Duración:* ~${game.durationMin} min%0A` +
+      (reviewSnippet ? `📖 *Temática / Reseña:*%0A"${reviewSnippet}"%0A%0A` : '%0A') +
+      `🎯 *¿Quién se anima a estrenarlo o aprender a jugarlo?*%0A` +
+      `📲 *¡Revisa la ficha completa y propón la primera partida aquí!:*%0A${encodeURIComponent(shareUrl)}`;
+
+    window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+  },
+
   /* GAMES (LUDOTECA) */
   setPlayerFilter(val) {
     this.activePlayerFilter = val;
@@ -4604,7 +4657,9 @@ const app = {
 
     const filtered = games.filter(g => {
       const matchSearch = g.title.toLowerCase().includes(search) || (g.description && g.description.toLowerCase().includes(search));
+      const isRecent = this.isGameRecent(g);
       let matchPlayers = true;
+      if (filter === 'recent') matchPlayers = isRecent;
       if (filter === '2') matchPlayers = g.minPlayers <= 2;
       if (filter === '4') matchPlayers = g.minPlayers <= 4 && g.maxPlayers >= 4;
       if (filter === '5') matchPlayers = g.maxPlayers >= 5;
@@ -4628,9 +4683,10 @@ const app = {
       const descSnippet = game.description || 'Sin reseña registrada. Toca modificar para agregar una.';
       const timesPlayed = sessions.filter(s => s.gameId === game.id && (s.winnerId || ((s.date || '').split('T')[0] < todayStr))).length;
       const canEdit = this.canEditGame(game);
+      const isRecent = this.isGameRecent(game);
 
       return `
-        <div class="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex gap-3.5 hover:shadow-sm transition-all">
+        <div class="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex gap-3.5 hover:shadow-sm transition-all ${isRecent ? 'ring-1 ring-amber-300/80 bg-gradient-to-r from-amber-50/20 to-white' : ''}">
           <!-- Game Cover Art (Clickable) -->
           ${coverHtml}
 
@@ -4639,9 +4695,12 @@ const app = {
             <div>
               <!-- Title & Owner -->
               <div class="flex items-start justify-between gap-1.5">
-                <h3 onclick="app.showGameDetail('${game.id}')" class="font-bold text-sm text-slate-900 hover:text-brand-600 cursor-pointer truncate" title="Ver reseña">
-                  ${game.title}
-                </h3>
+                <div class="min-w-0 flex items-center gap-1.5">
+                  <h3 onclick="app.showGameDetail('${game.id}')" class="font-bold text-sm text-slate-900 hover:text-brand-600 cursor-pointer truncate" title="Ver reseña">
+                    ${game.title}
+                  </h3>
+                  ${isRecent ? `<span class="shrink-0 text-[8.5px] font-black text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.2 rounded-full shadow-2xs">✨ ¡Nuevo!</span>` : ''}
+                </div>
                 <span class="text-[10px] text-slate-400 font-medium shrink-0 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md">
                   De ${owner.name.split(' ')[0]}
                 </span>
@@ -4679,6 +4738,9 @@ const app = {
                   <i class="fa-solid fa-trash-can"></i>
                 </button>
                 ` : ''}
+                <button onclick="app.shareNewGameToWhatsapp('${game.id}')" title="Avisar en WhatsApp del Club" class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-700 flex items-center justify-center text-xs transition-colors">
+                  <i class="fa-brands fa-whatsapp text-xs"></i>
+                </button>
                 <button onclick="app.quickScheduleGame('${game.id}')" title="Programar partida" class="px-2.5 py-1 rounded-lg bg-brand-50 active:bg-brand-100 text-brand-700 font-bold text-xs flex items-center gap-1 transition-colors">
                   <i class="fa-solid fa-calendar-plus text-[10px]"></i>
                   <span>Jugar</span>
@@ -4729,6 +4791,7 @@ const app = {
     image = getSafeImageUrl(image);
 
     let games = db.getGames();
+    let createdGameId = null;
 
     if (editId) {
       // Modificar existente
@@ -4755,9 +4818,11 @@ const app = {
         durationMin,
         ownerId,
         image,
-        description
+        description,
+        createdAt: new Date().toISOString()
       };
       games.unshift(newGame);
+      createdGameId = newGame.id;
     }
 
     // Limpiar de lista de eliminados si se vuelve a crear o editar
@@ -4788,6 +4853,18 @@ const app = {
     this.populateModalSelects();
     this.renderGames();
     this.renderSessions();
+
+    // Notificación y aviso para WhatsApp al agregar un nuevo juego a la ludoteca
+    if (!editId && createdGameId) {
+      setTimeout(() => {
+        if (confirm(
+          `🎉 ¡"${title}" fue agregado con éxito a la Ludoteca!\n\n` +
+          `¿Deseas compartir la novedad en el Grupo de WhatsApp para que todos lo conozcan y coordinen una fecha para estrenarlo?`
+        )) {
+          this.shareNewGameToWhatsapp(createdGameId);
+        }
+      }, 250);
+    }
   },
 
   quickScheduleGame(gameId) {
