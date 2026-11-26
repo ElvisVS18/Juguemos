@@ -766,8 +766,9 @@ const db = {
       const raw = localStorage.getItem('bg_friends');
       let friends = raw ? JSON.parse(raw) : DEFAULT_FRIENDS;
       if (Array.isArray(friends) && friends.length > 0) {
-        return friends.map(f => ({
+        return friends.filter(f => f && typeof f === 'object').map(f => ({
           ...f,
+          name: f.name ? String(f.name).trim() : 'Jugador',
           phone: f.phone || (f.id === 'u1' ? '999999999' : ''),
           pin: f.pin || '1234',
           role: f.role || (f.id === 'u1' ? 'admin' : 'member'),
@@ -1214,6 +1215,7 @@ const app = {
     this.updateDbStatusUi();
     this.updateThemeUi();
     this.populateModalSelects();
+    this.renderGateNewMeeplePalette();
 
     // Auto-migrate any existing games in localStorage with unblocked official high-res covers & reviews
     this.migrateExistingGames();
@@ -1685,52 +1687,66 @@ const app = {
   },
 
   renderGateNewMeeplePalette(searchQuery = '') {
-    const friends = db.getFriends();
-    const takenFigures = new Map();
-    friends.forEach(f => {
-      const fId = f.figure || getFigure(f.color).id;
-      takenFigures.set(fId, f.name.split(' ')[0]);
-    });
-
     const box = document.getElementById('gate-new-meeple-palette');
     if (!box) return;
 
-    // Find first available figure if current selection is taken
-    const availableFigures = BOARD_GAME_FIGURES.filter(fig => !takenFigures.has(fig.id));
-    if (!this.selectedFigureId || takenFigures.has(this.selectedFigureId)) {
-      this.selectedFigureId = availableFigures.length > 0 ? availableFigures[0].id : BOARD_GAME_FIGURES[0].id;
-    }
-    const hidden = document.getElementById('gate-selected-meeple-color');
-    if (hidden) hidden.value = this.selectedFigureId;
+    try {
+      const friends = db.getFriends() || [];
+      const takenFigures = new Map();
+      friends.forEach(f => {
+        if (!f) return;
+        const fId = f.figure || (f.color ? getFigure(f.color).id : 'crown');
+        const fName = (f.name ? String(f.name).trim().split(' ')[0] : 'Amigo');
+        takenFigures.set(fId, fName);
+      });
 
-    const q = (searchQuery || (document.getElementById('gate-figure-search')?.value || '')).toLowerCase().trim();
-    const filtered = BOARD_GAME_FIGURES.filter(fig => !q || fig.name.toLowerCase().includes(q) || fig.id.includes(q));
+      // Find first available figure if current selection is taken
+      const availableFigures = BOARD_GAME_FIGURES.filter(fig => !takenFigures.has(fig.id));
+      if (!this.selectedFigureId || takenFigures.has(this.selectedFigureId)) {
+        this.selectedFigureId = availableFigures.length > 0 ? availableFigures[0].id : BOARD_GAME_FIGURES[0].id;
+      }
+      const hidden = document.getElementById('gate-selected-meeple-color');
+      if (hidden) hidden.value = this.selectedFigureId;
 
-    box.innerHTML = filtered.map(fig => {
-      const isTaken = takenFigures.has(fig.id);
-      const isSel = fig.id === this.selectedFigureId && !isTaken;
+      const q = (searchQuery || (document.getElementById('gate-figure-search')?.value || '')).toLowerCase().trim();
+      const filtered = BOARD_GAME_FIGURES.filter(fig => !q || (fig.name && fig.name.toLowerCase().includes(q)) || (fig.id && fig.id.includes(q)));
 
-      if (isTaken) {
-        const ownerName = takenFigures.get(fig.id) || 'Ocupado';
+      box.innerHTML = filtered.map(fig => {
+        const isTaken = takenFigures.has(fig.id);
+        const isSel = fig.id === this.selectedFigureId && !isTaken;
+
+        if (isTaken) {
+          const ownerName = takenFigures.get(fig.id) || 'Ocupado';
+          return `
+            <div class="p-1 rounded-xl bg-slate-100/70 border border-slate-200/50 opacity-35 flex flex-col items-center justify-center gap-0.5 cursor-not-allowed select-none" title="Figura ya elegida por ${ownerName}">
+              <div class="w-7 h-7 rounded-lg ${fig.color} text-white flex items-center justify-center text-[11px] opacity-70">
+                <i class="${fig.icon}"></i>
+              </div>
+              <span class="text-[7.5px] font-bold text-slate-500 truncate max-w-[48px]">${ownerName}</span>
+            </div>
+          `;
+        }
+
         return `
-          <div class="p-1 rounded-xl bg-slate-100/70 border border-slate-200/50 opacity-35 flex flex-col items-center justify-center gap-0.5 cursor-not-allowed select-none" title="Figura ya elegida por ${ownerName}">
-            <div class="w-7 h-7 rounded-lg ${fig.color} text-white flex items-center justify-center text-[11px] opacity-70">
+          <button type="button" onclick="app.setGateNewMeepleColor('${fig.id}')" class="p-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 bg-white border ${isSel ? 'border-brand-500 ring-2 ring-brand-400 shadow-xs scale-105 bg-brand-50/50' : 'border-slate-200 hover:border-brand-300 active:scale-95'}">
+            <div class="w-7 h-7 rounded-lg ${fig.color} text-white flex items-center justify-center text-[12px] shadow-2xs">
               <i class="${fig.icon}"></i>
             </div>
-            <span class="text-[7.5px] font-bold text-slate-500 truncate max-w-[48px]">${ownerName}</span>
-          </div>
+            <span class="text-[7.5px] font-bold text-slate-700 truncate max-w-[50px]">${(fig.name || '').split(' ')[0]}</span>
+          </button>
         `;
-      }
-
-      return `
-        <button type="button" onclick="app.setGateNewMeepleColor('${fig.id}')" class="p-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 bg-white border ${isSel ? 'border-brand-500 ring-2 ring-brand-400 shadow-xs scale-105 bg-brand-50/50' : 'border-slate-200 hover:border-brand-300 active:scale-95'}">
-          <div class="w-7 h-7 rounded-lg ${fig.color} text-white flex items-center justify-center text-[12px] shadow-2xs">
+      }).join('');
+    } catch (err) {
+      console.error('Error rendering gate palette:', err);
+      box.innerHTML = BOARD_GAME_FIGURES.map(fig => `
+        <button type="button" onclick="app.setGateNewMeepleColor('${fig.id}')" class="p-1 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-white border border-slate-200">
+          <div class="w-7 h-7 rounded-lg ${fig.color} text-white flex items-center justify-center text-[12px]">
             <i class="${fig.icon}"></i>
           </div>
-          <span class="text-[7.5px] font-bold text-slate-700 truncate max-w-[50px]">${fig.name.split(' ')[0]}</span>
+          <span class="text-[7.5px] font-bold text-slate-700 truncate max-w-[50px]">${(fig.name || '').split(' ')[0]}</span>
         </button>
-      `;
-    }).join('');
+      `).join('');
+    }
   },
 
   submitGateLogin() {
@@ -1870,50 +1886,64 @@ const app = {
   },
 
   renderFigurePickerGrid(search = '') {
-    const friends = db.getFriends();
-    const current = friends.find(f => f.id === this.currentUserId);
-    const currentFigId = current?.figure || getFigure(current?.color).id;
-
-    const takenMap = new Map();
-    friends.forEach(f => {
-      const fFig = f.figure || getFigure(f.color).id;
-      if (f.id !== this.currentUserId) {
-        takenMap.set(fFig, f.name.split(' ')[0]);
-      }
-    });
-
     const box = document.getElementById('figure-picker-grid');
     if (!box) return;
 
-    const q = (search || '').toLowerCase().trim();
-    const filtered = BOARD_GAME_FIGURES.filter(fig => !q || fig.name.toLowerCase().includes(q) || fig.id.includes(q));
+    try {
+      const friends = db.getFriends() || [];
+      const current = friends.find(f => f && f.id === this.currentUserId);
+      const currentFigId = current?.figure || (current?.color ? getFigure(current.color).id : 'crown');
 
-    box.innerHTML = filtered.map(fig => {
-      const isTaken = takenMap.has(fig.id);
-      const isMine = fig.id === currentFigId;
-      const ownerName = isTaken ? takenMap.get(fig.id) : '';
+      const takenMap = new Map();
+      friends.forEach(f => {
+        if (!f) return;
+        const fFig = f.figure || (f.color ? getFigure(f.color).id : 'crown');
+        const fName = (f.name ? String(f.name).trim().split(' ')[0] : 'Amigo');
+        if (f.id !== this.currentUserId) {
+          takenMap.set(fFig, fName);
+        }
+      });
 
-      if (isTaken) {
+      const q = (search || '').toLowerCase().trim();
+      const filtered = BOARD_GAME_FIGURES.filter(fig => !q || (fig.name && fig.name.toLowerCase().includes(q)) || (fig.id && fig.id.includes(q)));
+
+      box.innerHTML = filtered.map(fig => {
+        const isTaken = takenMap.has(fig.id);
+        const isMine = fig.id === currentFigId;
+        const ownerName = isTaken ? takenMap.get(fig.id) : '';
+
+        if (isTaken) {
+          return `
+            <div class="p-2 rounded-2xl bg-slate-100/70 border border-slate-200/60 opacity-40 flex flex-col items-center justify-center gap-1 cursor-not-allowed select-none" title="Elegido por ${ownerName}">
+              <div class="w-9 h-9 rounded-xl ${fig.color} text-white flex items-center justify-center text-sm opacity-60">
+                <i class="${fig.icon}"></i>
+              </div>
+              <span class="text-[9px] font-bold text-slate-500 truncate max-w-[65px]">${ownerName}</span>
+            </div>
+          `;
+        }
+
         return `
-          <div class="p-2 rounded-2xl bg-slate-100/70 border border-slate-200/60 opacity-40 flex flex-col items-center justify-center gap-1 cursor-not-allowed select-none" title="Elegido por ${ownerName}">
-            <div class="w-9 h-9 rounded-xl ${fig.color} text-white flex items-center justify-center text-sm opacity-60">
+          <button type="button" onclick="app.selectPlayerFigure('${fig.id}')" class="p-2 rounded-2xl transition-all flex flex-col items-center justify-center gap-1 bg-white border ${isMine ? 'border-brand-500 ring-2 ring-brand-400 bg-brand-50/60 shadow-xs scale-105' : 'border-slate-200 hover:border-brand-300 active:scale-95'}">
+            <div class="w-9 h-9 rounded-xl ${fig.color} text-white flex items-center justify-center text-base shadow-2xs">
               <i class="${fig.icon}"></i>
             </div>
-            <span class="text-[9px] font-bold text-slate-500 truncate max-w-[65px]">${ownerName}</span>
-          </div>
+            <span class="text-[9px] font-extrabold text-slate-800 truncate max-w-[65px]">${fig.name}</span>
+            ${isMine ? '<span class="text-[8px] font-black text-brand-700 uppercase bg-brand-100 px-1 rounded">Tu Ficha</span>' : ''}
+          </button>
         `;
-      }
-
-      return `
-        <button type="button" onclick="app.selectPlayerFigure('${fig.id}')" class="p-2 rounded-2xl transition-all flex flex-col items-center justify-center gap-1 bg-white border ${isMine ? 'border-brand-500 ring-2 ring-brand-400 bg-brand-50/60 shadow-xs scale-105' : 'border-slate-200 hover:border-brand-300 active:scale-95'}">
-          <div class="w-9 h-9 rounded-xl ${fig.color} text-white flex items-center justify-center text-base shadow-2xs">
+      }).join('');
+    } catch (err) {
+      console.error('Error rendering figure picker:', err);
+      box.innerHTML = BOARD_GAME_FIGURES.map(fig => `
+        <button type="button" onclick="app.selectPlayerFigure('${fig.id}')" class="p-2 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border border-slate-200">
+          <div class="w-9 h-9 rounded-xl ${fig.color} text-white flex items-center justify-center text-base">
             <i class="${fig.icon}"></i>
           </div>
           <span class="text-[9px] font-extrabold text-slate-800 truncate max-w-[65px]">${fig.name}</span>
-          ${isMine ? '<span class="text-[8px] font-black text-brand-700 uppercase bg-brand-100 px-1 rounded">Tu Ficha</span>' : ''}
         </button>
-      `;
-    }).join('');
+      `).join('');
+    }
   },
 
   selectPlayerFigure(figureId) {
@@ -4595,7 +4625,8 @@ const app = {
       const isSelected = selectedFigureOrColor ? (fig.id === selectedFigureOrColor || fig.color === selectedFigureOrColor) : false;
 
       if (takenFriend) {
-        return `<option value="${fig.id}" disabled class="text-slate-400 bg-slate-100">${fig.name} (En uso por ${takenFriend.name.split(' ')[0]})</option>`;
+        const tName = takenFriend.name ? String(takenFriend.name).trim().split(' ')[0] : 'Amigo';
+        return `<option value="${fig.id}" disabled class="text-slate-400 bg-slate-100">${fig.name} (En uso por ${tName})</option>`;
       }
       return `<option value="${fig.id}" ${isSelected ? 'selected' : ''}>${fig.name}</option>`;
     }).join('');
