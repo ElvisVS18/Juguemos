@@ -2841,12 +2841,14 @@ const app = {
 
   isGameRecent(game) {
     if (!game) return false;
+    const DAYS_AS_NEW = 14; // Un juego se considera "Nuevo" durante exactamente 14 días (2 semanas)
+    const maxAgeMs = DAYS_AS_NEW * 24 * 60 * 60 * 1000;
     if (game.createdAt) {
       const d = new Date(game.createdAt).getTime();
-      if (!isNaN(d) && (Date.now() - d) < (21 * 24 * 60 * 60 * 1000)) return true;
+      if (!isNaN(d) && (Date.now() - d) < maxAgeMs) return true;
     } else if (game.id && game.id.startsWith('g_')) {
       const ts = parseInt(game.id.replace('g_', ''));
-      if (!isNaN(ts) && ts > 1700000000000 && (Date.now() - ts) < (21 * 24 * 60 * 60 * 1000)) {
+      if (!isNaN(ts) && ts > 1700000000000 && (Date.now() - ts) < maxAgeMs) {
         return true;
       }
     }
@@ -2919,10 +2921,12 @@ const app = {
             <span>Programar Partida con este Juego</span>
           </button>
 
+          ${isRecent ? `
           <button onclick="app.shareNewGameToWhatsapp('${game.id}')" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
             <i class="fa-brands fa-whatsapp text-sm"></i>
             <span>Compartir Ficha en WhatsApp del Club</span>
           </button>
+          ` : ''}
 
           ${canEdit ? `
           <div class="grid grid-cols-2 gap-2">
@@ -4075,18 +4079,24 @@ const app = {
       .filter(Boolean)
       .join(', ');
 
-    const msg = `🎲 *¡NUEVA PARTIDA EN EL CLUB!* 🎲%0A%0A` +
-      `🔥 *Juego:* *${game?.title || 'Juego de mesa'}*%0A` +
-      (creator ? `👤 *Organiza:* ${creator.name}%0A` : '') +
-      `📅 *Fecha:* ${session.date}%0A` +
-      `⏰ *Hora:* ${cleanTime} hrs%0A` +
-      `📍 *Lugar:* ${session.location}%0A` +
-      `👥 *Cupos:* ${confirmed.length}/${game?.maxPlayers || 4} ${spotsLeft > 0 ? `(¡Quedan ${spotsLeft} libres!)` : '(¡Mesa llena!)'}%0A` +
-      (confirmedNames ? `🙋‍♂️ *Confirmados:* ${confirmedNames}%0A` : '') +
-      (session.notes ? `💬 *Nota:* "${session.notes}"%0A%0A` : '%0A') +
-      `📲 *¡Confirma si vas con 1 toque aquí!:*%0A${encodeURIComponent(shareUrl)}`;
+    const lines = [
+      '🎲 *¡NUEVA PARTIDA EN EL CLUB!* 🎲',
+      '',
+      `🔥 Juego: *${game?.title || 'Juego de mesa'}*`,
+      creator ? `👤 Organiza: ${creator.name}` : '',
+      `📅 Fecha: ${session.date}`,
+      `⏰ Hora: ${cleanTime} hrs`,
+      `📍 Lugar: ${session.location}`,
+      `👥 Cupos: ${confirmed.length}/${game?.maxPlayers || 4} ${spotsLeft > 0 ? `(¡Quedan ${spotsLeft} libres!)` : '(¡Mesa llena!)'}`,
+      confirmedNames ? `🙋‍♂️ Confirmados: ${confirmedNames}` : '',
+      session.notes ? `💬 Nota: "${session.notes}"` : '',
+      '',
+      '📲 ¡Confirma si vas con 1 toque aquí!:',
+      shareUrl
+    ].filter(l => l !== null && l !== undefined);
 
-    window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+    const fullMsg = lines.join('\n');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(fullMsg)}`, '_blank');
   },
 
   handleCreateSession(event) {
@@ -4607,6 +4617,55 @@ const app = {
     window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
   },
 
+  pendingNewGameId: null,
+
+  openNewGameSuccessModal(gameId) {
+    this.pendingNewGameId = gameId;
+    const games = db.getGames();
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+
+    const friends = db.getFriends();
+    const owner = friends.find(f => f.id === game.ownerId) || { name: 'Comunitario' };
+    const coverUrl = getSafeImageUrl(game.image);
+
+    const container = document.getElementById('new-game-success-content');
+    if (container) {
+      container.innerHTML = `
+        <div class="bg-gradient-to-r from-brand-50 to-indigo-50 border border-brand-200 p-3.5 rounded-2xl flex items-center gap-3">
+          <div class="w-14 h-16 rounded-xl overflow-hidden bg-slate-900 shrink-0 shadow-xs border border-brand-200">
+            ${coverUrl ? `<img src="${coverUrl}" alt="${game.title}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-brand-400 text-lg"><i class="fa-solid fa-dice-d20"></i></div>`}
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-[9px] font-black uppercase tracking-wider text-brand-700 bg-brand-100/70 px-2 py-0.5 rounded-full">Ludoteca del Club</span>
+            <h4 class="font-black text-sm text-slate-900 truncate mt-1">${game.title}</h4>
+            <p class="text-[11px] text-slate-500 font-medium">Aportado por <strong>${owner.name}</strong> • ${game.minPlayers}-${game.maxPlayers} jug. • ~${game.durationMin}m</p>
+          </div>
+        </div>
+
+        <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-950 space-y-1.5">
+          <div class="font-black flex items-center gap-1.5 text-amber-900 text-xs">
+            <i class="fa-solid fa-bullhorn text-amber-600"></i>
+            <span>«🎉 ¡${game.title} fue agregado con éxito a la Ludoteca!</span>
+          </div>
+          <p class="text-[11px] text-amber-900 font-medium leading-relaxed">
+            ¿Deseas compartir la novedad en el Grupo de WhatsApp para que todos lo conozcan y coordinen una fecha para estrenarlo?»
+          </p>
+        </div>
+      `;
+    }
+
+    this.openModal('modal-new-game-success');
+  },
+
+  confirmShareNewGame() {
+    const gId = this.pendingNewGameId;
+    this.closeModal('modal-new-game-success');
+    if (gId) {
+      this.shareNewGameToWhatsapp(gId);
+    }
+  },
+
   shareNewGameToWhatsapp(gameId) {
     const games = db.getGames();
     const game = games.find(g => g.id === gameId);
@@ -4614,24 +4673,30 @@ const app = {
 
     const friends = db.getFriends();
     const owner = friends.find(f => f.id === game.ownerId) || { name: 'Comunitario' };
-    const shareUrl = this.getShareUrl();
+    const shareUrl = 'https://elvisvs18.github.io/Juguemos/';
 
-    // Extracto limpio y conciso de la reseña (máximo 220 caracteres para que el mensaje no sea abrumador)
+    // Extracto limpio y conciso de la reseña
     let reviewSnippet = (game.description || '').trim();
-    if (reviewSnippet.length > 220) {
-      reviewSnippet = reviewSnippet.substring(0, 220).trim() + '...';
+    if (reviewSnippet.length > 250) {
+      reviewSnippet = reviewSnippet.substring(0, 250).trim() + '...';
     }
 
-    const msg = `🎲✨ *¡NUEVO JUEGO EN LA LUDOTECA DEL CLUB!* ✨🎲%0A%0A` +
-      `🔥 *Juego:* *${game.title}*%0A` +
-      `👤 *Aportado por:* ${owner.name}%0A` +
-      `👥 *Jugadores:* ${game.minPlayers} - ${game.maxPlayers} jugadores%0A` +
-      `⏳ *Duración:* ~${game.durationMin} min%0A` +
-      (reviewSnippet ? `📖 *Temática / Reseña:*%0A"${reviewSnippet}"%0A%0A` : '%0A') +
-      `🎯 *¿Quién se anima a estrenarlo o aprender a jugarlo?*%0A` +
-      `📲 *¡Revisa la ficha completa y propón la primera partida aquí!:*%0A${encodeURIComponent(shareUrl)}`;
+    const lines = [
+      '🎲✨ ¡NUEVO JUEGO EN LA LUDOTECA DEL CLUB! ✨🎲',
+      '',
+      `🔥 Juego: *${game.title}*`,
+      `👤 Aportado por: ${owner.name}`,
+      `👥 Jugadores: ${game.minPlayers} - ${game.maxPlayers} jugadores`,
+      `⏳ Duración: ~${game.durationMin} min`,
+      reviewSnippet ? `📖 Temática / Reseña:\n"${reviewSnippet}"` : '',
+      '',
+      '🎯 ¿Quién se anima a estrenarlo o aprender a jugarlo?',
+      '📲 ¡Revisa la ficha completa y propón la primera partida aquí!:',
+      shareUrl
+    ].filter(l => l !== null && l !== undefined);
 
-    window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+    const fullMsg = lines.join('\n');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(fullMsg)}`, '_blank');
   },
 
   /* GAMES (LUDOTECA) */
@@ -4697,53 +4762,62 @@ const app = {
             <div>
               <!-- Title & Owner -->
               <div class="flex items-start justify-between gap-1.5">
-                <div class="min-w-0 flex items-center gap-1.5">
+                <div class="min-w-0 flex items-center gap-1.5 flex-wrap">
                   <h3 onclick="app.showGameDetail('${game.id}')" class="font-bold text-sm text-slate-900 hover:text-brand-600 cursor-pointer truncate" title="Ver reseña">
                     ${game.title}
                   </h3>
                   ${isRecent ? `<span class="shrink-0 text-[8.5px] font-black text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.2 rounded-full shadow-2xs">✨ ¡Nuevo!</span>` : ''}
                 </div>
-                <span class="text-[10px] text-slate-400 font-medium shrink-0 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md">
+                <span class="text-[10px] text-slate-400 font-medium shrink-0 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md whitespace-nowrap">
                   De ${owner.name.split(' ')[0]}
                 </span>
               </div>
 
-              <!-- Description / Reseña Snippet -->
-              <p onclick="app.showGameDetail('${game.id}')" class="text-[11px] text-slate-600 line-clamp-2 mt-1 leading-snug cursor-pointer">
-                ${descSnippet}
-              </p>
-
-              <button onclick="app.showGameDetail('${game.id}')" class="text-[10px] font-bold text-brand-600 hover:underline mt-0.5 inline-flex items-center gap-1">
-                <span>Ver reseña completa</span>
-                <i class="fa-solid fa-arrow-right text-[8px]"></i>
-              </button>
-            </div>
-
-            <!-- Badges & Action Buttons -->
-            <div class="flex items-center justify-between pt-2 mt-1 border-t border-slate-100">
-              <div class="flex items-center gap-1.5">
-                <span class="text-[10px] font-bold text-brand-700 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-md">
-                  ${game.minPlayers}-${game.maxPlayers} jug. • ${game.durationMin}m
+              <!-- Badges de Datos: Jugadores, Duración y Partidas (Fila propia con espacio completo, nunca se distorsiona) -->
+              <div class="flex items-center gap-1.5 mt-1 text-[10px] font-bold overflow-x-auto no-scrollbar py-0.5">
+                <span class="text-brand-700 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-md whitespace-nowrap shrink-0 flex items-center gap-1">
+                  <i class="fa-solid fa-users text-[9px] text-brand-600"></i>
+                  <span>${game.minPlayers}-${game.maxPlayers} jug.</span>
                 </span>
-                <span class="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                  <i class="fa-solid fa-gamepad text-[9px]"></i> ${timesPlayed} ${timesPlayed === 1 ? 'jugada' : 'jugadas'}
+                <span class="text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md whitespace-nowrap shrink-0 flex items-center gap-1">
+                  <i class="fa-solid fa-stopwatch text-[9px] text-slate-500"></i>
+                  <span>~${game.durationMin}m</span>
+                </span>
+                <span class="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md whitespace-nowrap shrink-0 flex items-center gap-1">
+                  <i class="fa-solid fa-gamepad text-[9px]"></i>
+                  <span>${timesPlayed} ${timesPlayed === 1 ? 'partida' : 'partidas'}</span>
                 </span>
               </div>
 
+              <!-- Description / Reseña Snippet -->
+              <p onclick="app.showGameDetail('${game.id}')" class="text-[11px] text-slate-600 line-clamp-2 mt-1.5 leading-snug cursor-pointer">
+                ${descSnippet}
+              </p>
+            </div>
+
+            <!-- Fila Inferior: Enlace de reseña a la izquierda y Botones de acción a la derecha -->
+            <div class="flex items-center justify-between pt-2 mt-1.5 border-t border-slate-100 gap-2">
+              <button onclick="app.showGameDetail('${game.id}')" class="text-[10px] font-bold text-brand-600 hover:underline inline-flex items-center gap-1 shrink-0">
+                <span>Ver reseña</span>
+                <i class="fa-solid fa-arrow-right text-[8px]"></i>
+              </button>
+
               <!-- Quick Action Buttons -->
-              <div class="flex items-center gap-1.5">
+              <div class="flex items-center gap-1.5 shrink-0">
                 ${canEdit ? `
-                <button onclick="app.editGame('${game.id}')" title="Modificar / Editar juego" class="w-7 h-7 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 hover:text-brand-600 flex items-center justify-center text-xs transition-colors">
+                <button onclick="app.editGame('${game.id}')" title="Modificar / Editar juego" class="w-7 h-7 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 hover:text-brand-600 flex items-center justify-center text-xs transition-colors shrink-0">
                   <i class="fa-solid fa-pen"></i>
                 </button>
-                <button onclick="app.deleteGame('${game.id}')" title="Eliminar juego" class="w-7 h-7 rounded-lg bg-slate-100 active:bg-rose-100 text-slate-400 hover:text-rose-600 flex items-center justify-center text-xs transition-colors">
+                <button onclick="app.deleteGame('${game.id}')" title="Eliminar juego" class="w-7 h-7 rounded-lg bg-slate-100 active:bg-rose-100 text-slate-400 hover:text-rose-600 flex items-center justify-center text-xs transition-colors shrink-0">
                   <i class="fa-solid fa-trash-can"></i>
                 </button>
                 ` : ''}
-                <button onclick="app.shareNewGameToWhatsapp('${game.id}')" title="Avisar en WhatsApp del Club" class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-700 flex items-center justify-center text-xs transition-colors">
+                ${isRecent ? `
+                <button onclick="app.shareNewGameToWhatsapp('${game.id}')" title="Avisar en WhatsApp del Club" class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-700 flex items-center justify-center text-xs transition-colors shrink-0">
                   <i class="fa-brands fa-whatsapp text-xs"></i>
                 </button>
-                <button onclick="app.quickScheduleGame('${game.id}')" title="Programar partida" class="px-2.5 py-1 rounded-lg bg-brand-50 active:bg-brand-100 text-brand-700 font-bold text-xs flex items-center gap-1 transition-colors">
+                ` : ''}
+                <button onclick="app.quickScheduleGame('${game.id}')" title="Programar partida" class="px-2.5 py-1 rounded-lg bg-brand-50 active:bg-brand-100 text-brand-700 font-bold text-xs flex items-center gap-1 transition-colors shrink-0 whitespace-nowrap">
                   <i class="fa-solid fa-calendar-plus text-[10px]"></i>
                   <span>Jugar</span>
                 </button>
@@ -4859,16 +4933,9 @@ const app = {
     this.renderGames();
     this.renderSessions();
 
-    // Notificación y aviso para WhatsApp al agregar un nuevo juego a la ludoteca
+    // Apartado de aviso inmediato para WhatsApp al agregar un nuevo juego a la ludoteca
     if (!editId && createdGameId) {
-      setTimeout(() => {
-        if (confirm(
-          `🎉 ¡"${title}" fue agregado con éxito a la Ludoteca!\n\n` +
-          `¿Deseas compartir la novedad en el Grupo de WhatsApp para que todos lo conozcan y coordinen una fecha para estrenarlo?`
-        )) {
-          this.shareNewGameToWhatsapp(createdGameId);
-        }
-      }, 250);
+      this.openNewGameSuccessModal(createdGameId);
     }
   },
 

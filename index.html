@@ -935,6 +935,40 @@
   </div>
 
   <!-- ======================================================== -->
+  <!-- MOBILE BOTTOM SHEET MODAL: ANUNCIO DE NUEVO JUEGO (WHATSAPP) -->
+  <!-- ======================================================== -->
+  <div id="modal-new-game-success" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
+    <div onclick="app.closeModal('modal-new-game-success')" class="flex-1"></div>
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl sm:m-auto sm:max-w-md w-full p-5 shadow-2xl animate-sheet space-y-4">
+      <div class="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden mb-1"></div>
+
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="font-extrabold text-base text-slate-900 flex items-center gap-2">
+          <span>🎉</span>
+          <span>¡Nuevo Juego en la Ludoteca!</span>
+        </h3>
+        <button onclick="app.closeModal('modal-new-game-success')" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <div id="new-game-success-content" class="space-y-3">
+        <!-- Rendered dynamically with game cover, title, owner, and prompt -->
+      </div>
+
+      <div class="space-y-2 pt-1">
+        <button type="button" onclick="app.confirmShareNewGame()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]">
+          <i class="fa-brands fa-whatsapp text-lg"></i>
+          <span>Compartir en el Grupo de WhatsApp</span>
+        </button>
+        <button type="button" onclick="app.closeModal('modal-new-game-success')" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition-colors">
+          Cerrar (solo guardar en la app)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
   <!-- MOBILE BOTTOM SHEET MODAL: DETALLE Y RESEÑA DE JUEGO -->
   <!-- ======================================================== -->
   <div id="modal-game-detail" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end hidden">
@@ -1389,6 +1423,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=58"></script>
+  <script src="app.js?v=60"></script>
 </body>
 </html>
