@@ -1382,17 +1382,7 @@ const app = {
 
   getShareUrl() {
     let base = window.location.href.split('?')[0].split('#')[0];
-    const params = new URLSearchParams();
-    const url = db.getGSheetUrl();
-    if (url && url !== CLUB_DEFAULT_GSHEET_URL) {
-      params.set('db', url);
-    }
-    const wgrp = this.getWhatsappGroupLink();
-    if (wgrp && wgrp.includes('whatsapp.com')) {
-      params.set('wgrp', wgrp);
-    }
-    const q = params.toString();
-    return q ? `${base}?${q}` : base;
+    return base;
   },
 
   updateDbStatusUi() {
