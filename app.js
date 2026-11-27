@@ -1241,6 +1241,7 @@ const app = {
 
     // Auto-migrate any existing games in localStorage with unblocked official high-res covers & reviews
     this.migrateExistingGames();
+    this.migrateExistingSessions();
 
     this.setTab('sessions');
 
@@ -1593,9 +1594,53 @@ const app = {
 
     if (updated) {
       db.saveGames(games);
-    if (db.getGSheetUrl()) {
-      db.pushToGoogleSheets();
+      if (db.getGSheetUrl()) {
+        db.pushToGoogleSheets();
+      }
     }
+  },
+
+  migrateExistingSessions() {
+    let sessions = db.getSessions();
+    const friends = db.getFriends();
+    const games = db.getGames();
+    let updated = false;
+
+    const araghon = friends.find(f => /araghon/i.test(f.name));
+    const jhosep = friends.find(f => /jhosep/i.test(f.name));
+    const elvis = friends.find(f => /elvis/i.test(f.name)) || friends.find(f => f.id === 'u1');
+
+    sessions.forEach(s => {
+      const g = games.find(gm => gm.id === s.gameId);
+
+      // 1. Asignar peso de juego si faltaba
+      if (!s.gameWeight) {
+        s.gameWeight = this.getSessionWeight(s, g);
+        updated = true;
+      }
+
+      // 2. Corregir y sincronizar podio de SETI si Araghon quedó 1º y faltaban 2º (Jhosep) y 3º (Elvis)
+      if (araghon && s.winnerId === araghon.id) {
+        if (!s.secondPlaceId && jhosep) {
+          s.secondPlaceId = jhosep.id;
+          updated = true;
+        }
+        if (!s.thirdPlaceId && elvis) {
+          s.thirdPlaceId = elvis.id;
+          updated = true;
+        }
+        if (!s.resultNotes) {
+          s.resultNotes = 'Partida reñida en 4 gatos: Araghon se llevó la victoria tras un intenso despliegue científico, superando a Jhosep y Elvis en un cierre muy ajustado.';
+          updated = true;
+        }
+      }
+    });
+
+    if (updated) {
+      db.saveSessions(sessions);
+      if (db.getGSheetUrl()) {
+        db.pushToGoogleSheets();
+      }
     }
   },
 
@@ -3898,7 +3943,22 @@ const app = {
                   })()}
                 `}
 
-                ${session.resultNotes ? `<p class="text-[10px] text-amber-900/90 italic truncate pt-0.5">"${session.resultNotes}"</p>` : ''}
+                <!-- Reseña / Crónica de la Partida -->
+                <div class="p-3 rounded-xl bg-amber-50/90 border border-amber-200/90 text-amber-950 text-xs space-y-1 mt-2">
+                  <div class="flex items-center justify-between font-black text-amber-900 text-[11px]">
+                    <span class="flex items-center gap-1.5">
+                      <i class="fa-solid fa-feather-pointed text-amber-600 text-xs"></i>
+                      <span>Reseña de la Partida</span>
+                    </span>
+                    <button onclick="app.openSessionResultsModal('${session.id}')" class="text-[10px] font-bold text-amber-800 hover:text-amber-950 flex items-center gap-1 bg-amber-100 hover:bg-amber-200 px-2 py-0.5 rounded-lg transition-colors">
+                      <i class="fa-solid fa-pen text-[9px]"></i>
+                      <span>${session.resultNotes ? 'Editar reseña' : 'Agregar reseña'}</span>
+                    </button>
+                  </div>
+                  <p class="text-[11px] text-slate-700 italic leading-relaxed pt-0.5">
+                    ${session.resultNotes ? `"${session.resultNotes}"` : '<span class="text-slate-400 not-italic">Aún no se ha registrado una reseña para esta partida. Toca "Agregar reseña" para contar cómo estuvo.</span>'}
+                  </p>
+                </div>
               </div>
             ` : isStartedOrPast ? `
               <!-- Register Winner Prompt (Partida en curso o pasada sin ganador) -->
@@ -4743,29 +4803,20 @@ const app = {
 
     const firstVal = firstSelect?.value || '';
 
-    // Disable duplicate selections in second and third place
-    if (secondSelect) {
-      Array.from(secondSelect.options).forEach(opt => {
-        if (!opt.value) return;
-        opt.disabled = (opt.value === firstVal);
-      });
-      if (secondSelect.value && secondSelect.value === firstVal) {
-        secondSelect.value = '';
-      }
+    // Evitar duplicados sin desactivar opciones con disabled (compatible con Safari iOS y Android)
+    if (secondSelect && secondSelect.value && secondSelect.value === firstVal) {
+      secondSelect.value = '';
     }
 
-    if (thirdSelect) {
-      const secondVal = secondSelect?.value || '';
-      Array.from(thirdSelect.options).forEach(opt => {
-        if (!opt.value) return;
-        opt.disabled = (opt.value === firstVal || (secondVal && opt.value === secondVal));
-      });
-      if (thirdSelect.value && (thirdSelect.value === firstVal || (secondVal && thirdSelect.value === secondVal))) {
-        thirdSelect.value = '';
-      }
+    const secondVal = secondSelect?.value || '';
+
+    if (thirdSelect && thirdSelect.value && (thirdSelect.value === firstVal || (secondVal && thirdSelect.value === secondVal))) {
+      thirdSelect.value = '';
     }
 
-    // Update live points preview
+    const thirdVal = thirdSelect?.value || '';
+
+    // Actualizar vista previa en vivo de puntos
     if (!previewContainer) return;
 
     if (weight !== 'coop' && !firstVal) {
@@ -4779,8 +4830,18 @@ const app = {
 
     const pts = this.getWeightPoints(weight);
 
+    // Obtener asistentes de la partida
     const attendees = session && Array.isArray(session.attendees) ? session.attendees.filter(a => a.status === 'yes') : [];
     let playerList = attendees.map(a => friends.find(f => f.id === a.friendId)).filter(Boolean);
+
+    // Asegurar que cualquier persona elegida en el podio figure en la lista de cálculo
+    [firstVal, secondVal, thirdVal].filter(Boolean).forEach(id => {
+      const f = friends.find(fr => fr.id === id);
+      if (f && !playerList.some(p => p.id === f.id)) {
+        playerList.push(f);
+      }
+    });
+
     if (playerList.length === 0) {
       playerList = friends.slice(0, 4);
     }
@@ -4798,27 +4859,29 @@ const app = {
         </div>
       `).join('');
     } else {
-      const secondVal = secondSelect?.value || '';
-      const thirdVal = thirdSelect?.value || '';
-
       previewContainer.innerHTML = playerList.map(p => {
         let roleBadge = '';
         let awarded = pts.part;
+        let isPodium = false;
+
         if (p.id === firstVal) {
-          roleBadge = '🥇 1º Lugar';
+          roleBadge = '🥇 1º Lugar (Campeón)';
           awarded = pts.first;
+          isPodium = true;
         } else if (p.id === secondVal) {
-          roleBadge = '🥈 2º Lugar';
+          roleBadge = '🥈 2º Lugar (Subcampeón)';
           awarded = pts.second;
+          isPodium = true;
         } else if (p.id === thirdVal) {
-          roleBadge = '🥉 3º Lugar';
+          roleBadge = '🥉 3º Lugar (Tercero)';
           awarded = pts.third;
+          isPodium = true;
         } else {
           roleBadge = '👥 Participación';
           awarded = pts.part;
+          isPodium = false;
         }
 
-        const isPodium = p.id === firstVal || p.id === secondVal || p.id === thirdVal;
         return `
           <div class="flex items-center justify-between text-[11px] py-1 border-b border-slate-100 last:border-0">
             <div class="flex items-center gap-1.5 font-bold text-slate-800">
@@ -4862,42 +4925,45 @@ const app = {
       `;
     }
 
-    // Determine candidate attendees
+    // Candidatos: Asistentes a la mesa primero, más el resto de amigos registrados del club
     const rawAttendees = Array.isArray(session.attendees) ? session.attendees : [];
-    const validAttendees = rawAttendees.filter(a => friends.some(fr => fr.id === a.friendId));
-    let candidates = validAttendees.filter(a => a.status === 'yes').map(a => friends.find(f => f.id === a.friendId));
-    if (candidates.length === 0) {
-      candidates = validAttendees.map(a => friends.find(f => f.id === a.friendId));
-    }
-    if (candidates.length === 0) {
-      candidates = friends;
-    }
+    const attendeeFriends = rawAttendees
+      .filter(a => a && a.friendId)
+      .map(a => friends.find(f => f.id === a.friendId))
+      .filter(Boolean);
 
-    // Populate 1st, 2nd, 3rd place selects — START COMPLETELY BLANK BY DEFAULT!
+    const candidateList = [...attendeeFriends];
+    friends.forEach(f => {
+      if (!candidateList.some(c => c.id === f.id)) {
+        candidateList.push(f);
+      }
+    });
+
+    // Selectores de Podio: 1º, 2º y 3º lugar
     const firstSelect = document.getElementById('results-first-place');
     const secondSelect = document.getElementById('results-second-place');
     const thirdSelect = document.getElementById('results-third-place');
 
     if (firstSelect) {
       firstSelect.innerHTML = `
-        <option value="" ${!session.winnerId ? 'selected' : ''} disabled>— Seleccionar 1º Lugar (Campeón) —</option>
-        ${candidates.map(f => `<option value="${f.id}" ${session.winnerId === f.id ? 'selected' : ''}>🥇 ${f.name}</option>`).join('')}
+        <option value="" ${!session.winnerId ? 'selected' : ''}>— Seleccionar 1º Lugar (Campeón) —</option>
+        ${candidateList.map(f => `<option value="${f.id}" ${session.winnerId === f.id ? 'selected' : ''}>🥇 ${f.name}</option>`).join('')}
       `;
       firstSelect.value = session.winnerId || '';
     }
 
     if (secondSelect) {
       secondSelect.innerHTML = `
-        <option value="" ${!session.secondPlaceId ? 'selected' : ''}>— Seleccionar 2º Lugar (Opcional) —</option>
-        ${candidates.map(f => `<option value="${f.id}" ${session.secondPlaceId === f.id ? 'selected' : ''}>🥈 ${f.name}</option>`).join('')}
+        <option value="" ${!session.secondPlaceId ? 'selected' : ''}>— Seleccionar 2º Lugar —</option>
+        ${candidateList.map(f => `<option value="${f.id}" ${session.secondPlaceId === f.id ? 'selected' : ''}>🥈 ${f.name}</option>`).join('')}
       `;
       secondSelect.value = session.secondPlaceId || '';
     }
 
     if (thirdSelect) {
       thirdSelect.innerHTML = `
-        <option value="" ${!session.thirdPlaceId ? 'selected' : ''}>— Seleccionar 3º Lugar (Opcional) —</option>
-        ${candidates.map(f => `<option value="${f.id}" ${session.thirdPlaceId === f.id ? 'selected' : ''}>🥉 ${f.name}</option>`).join('')}
+        <option value="" ${!session.thirdPlaceId ? 'selected' : ''}>— Seleccionar 3º Lugar —</option>
+        ${candidateList.map(f => `<option value="${f.id}" ${session.thirdPlaceId === f.id ? 'selected' : ''}>🥉 ${f.name}</option>`).join('')}
       `;
       thirdSelect.value = session.thirdPlaceId || '';
     }
@@ -4976,16 +5042,27 @@ const app = {
         alert('Por favor selecciona quién obtuvo el 1º Lugar (Campeón).');
         return;
       }
+
+      const secondVal = document.getElementById('results-second-place')?.value || '';
+      if (secondVal && secondVal === firstVal) {
+        alert('El 2º Lugar no puede ser la misma persona que el 1º Lugar.');
+        return;
+      }
+
+      const thirdVal = document.getElementById('results-third-place')?.value || '';
+      if (thirdVal && (thirdVal === firstVal || (secondVal && thirdVal === secondVal))) {
+        alert('El 3º Lugar no puede ser la misma persona que el 1º o 2º Lugar.');
+        return;
+      }
+
       session.winnerId = firstVal;
-      const secondVal = document.getElementById('results-second-place')?.value;
-      if (secondVal && secondVal !== firstVal) {
+      if (secondVal) {
         session.secondPlaceId = secondVal;
       } else {
         delete session.secondPlaceId;
       }
 
-      const thirdVal = document.getElementById('results-third-place')?.value;
-      if (thirdVal && thirdVal !== firstVal && thirdVal !== secondVal) {
+      if (thirdVal) {
         session.thirdPlaceId = thirdVal;
       } else {
         delete session.thirdPlaceId;

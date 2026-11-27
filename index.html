@@ -1199,7 +1199,6 @@
             <label class="block text-[10px] font-bold text-slate-600 mb-1">Puntos o récord del equipo en la partida (Opcional):</label>
             <input type="text" id="results-coop-score" placeholder="Ej. 85 puntos, Ronda 12, 3 alertas, etc." class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-white font-medium focus:ring-2 focus:ring-brand-500">
           </div>
-          </div>
         </div>
 
         <!-- VISTA PREVIA EN VIVO DE PUNTOS -->
@@ -1213,9 +1212,15 @@
           </div>
         </div>
 
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Crónica o momentos destacados (Opcional):</label>
-          <input type="text" id="results-notes" placeholder="Ej. ¡Elvis ganó por 2 puntos en el último turno!" class="w-full border border-slate-300 rounded-xl p-2.5 text-xs bg-slate-50 font-medium focus:ring-2 focus:ring-brand-500">
+        <div class="bg-amber-50/50 p-3 rounded-2xl border border-amber-200/80 space-y-1.5">
+          <label class="block font-black text-amber-950 text-xs flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <i class="fa-solid fa-feather-pointed text-amber-600"></i>
+              <span>Reseña / Crónica de la Partida:</span>
+            </span>
+            <span class="text-[10px] font-bold text-amber-800 bg-amber-200/60 px-2 py-0.5 rounded-full">Momento Clave</span>
+          </label>
+          <textarea id="results-notes" rows="3" placeholder="¿Cómo estuvo la partida? Anota jugadas épicas, quién lideró, desempates o anécdotas para el club..." class="w-full border border-amber-300 rounded-xl p-2.5 text-xs bg-white font-medium text-slate-800 focus:ring-2 focus:ring-amber-400 placeholder:text-slate-400 leading-relaxed"></textarea>
         </div>
 
         <div class="pt-2">
@@ -1563,6 +1568,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=67"></script>
+  <script src="app.js?v=68"></script>
 </body>
 </html>
