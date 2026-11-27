@@ -3839,6 +3839,7 @@ const app = {
                 ${isCoop ? `
                   <div class="flex items-center gap-2 text-xs font-bold ${isCoopWin ? 'text-emerald-900' : 'text-slate-700'}">
                     <span>${isCoopWin ? '🏆 ¡El equipo venció al juego!' : '💀 ¡El juego venció al equipo!'}</span>
+                    ${session.coopScore ? `<span class="text-xs font-black text-slate-800 bg-white px-2 py-0.5 rounded-lg border border-slate-200">(${session.coopScore})</span>` : ''}
                     <span class="text-[10px] font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">${isCoopWin ? '+8 pts c/u' : '+2 pts c/u'}</span>
                   </div>
                 ` : `
@@ -3847,7 +3848,8 @@ const app = {
                       <span class="text-sm">🥇</span>
                       <div class="min-w-0 flex-1 truncate">
                         <span class="font-black text-slate-900">${winnerFriend ? winnerFriend.name.split(' ')[0] : 'Ganador'}</span>
-                        <span class="text-[9.5px] font-black text-amber-700 ml-1">+${session.gameWeight === 'heavy' ? 12 : session.gameWeight === 'light' ? 3 : 7} pts</span>
+                        ${session.firstPlaceScore ? `<span class="text-[10.5px] font-bold text-amber-900 ml-0.5">(${session.firstPlaceScore} pts)</span>` : ''}
+                        <span class="text-[9.5px] font-black text-amber-700 ml-1">+${session.gameWeight === 'heavy' ? 12 : session.gameWeight === 'light' ? 3 : 7} liga</span>
                       </div>
                     </div>
                     ${secondFriend ? `
@@ -3855,7 +3857,8 @@ const app = {
                       <span class="text-sm">🥈</span>
                       <div class="min-w-0 flex-1 truncate">
                         <span class="font-extrabold text-slate-800">${secondFriend.name.split(' ')[0]}</span>
-                        <span class="text-[9.5px] font-bold text-slate-600 ml-1">+${session.gameWeight === 'heavy' ? 7 : session.gameWeight === 'light' ? 1 : 4} pts</span>
+                        ${session.secondPlaceScore ? `<span class="text-[10.5px] font-bold text-slate-700 ml-0.5">(${session.secondPlaceScore} pts)</span>` : ''}
+                        <span class="text-[9.5px] font-bold text-slate-600 ml-1">+${session.gameWeight === 'heavy' ? 7 : session.gameWeight === 'light' ? 1 : 4} liga</span>
                       </div>
                     </div>
                     ` : ''}
@@ -3864,11 +3867,26 @@ const app = {
                       <span class="text-sm">🥉</span>
                       <div class="min-w-0 flex-1 truncate">
                         <span class="font-extrabold text-slate-800">${thirdFriend.name.split(' ')[0]}</span>
-                        <span class="text-[9.5px] font-bold text-amber-800 ml-1">+${session.gameWeight === 'heavy' ? 4 : session.gameWeight === 'light' ? 0 : 2} pts</span>
+                        ${session.thirdPlaceScore ? `<span class="text-[10.5px] font-bold text-amber-900 ml-0.5">(${session.thirdPlaceScore} pts)</span>` : ''}
+                        <span class="text-[9.5px] font-bold text-amber-800 ml-1">+${session.gameWeight === 'heavy' ? 4 : session.gameWeight === 'light' ? 0 : 2} liga</span>
                       </div>
                     </div>
                     ` : ''}
                   </div>
+                  ${(() => {
+                    const otherNames = confirmed
+                      .filter(a => a.friendId !== session.winnerId && a.friendId !== session.secondPlaceId && a.friendId !== session.thirdPlaceId)
+                      .map(a => friends.find(f => f.id === a.friendId)?.name?.split(' ')[0])
+                      .filter(Boolean)
+                      .join(', ');
+                    const partPts = session.gameWeight === 'heavy' ? 2 : session.gameWeight === 'light' ? 0.5 : 1;
+                    return otherNames ? `
+                      <div class="text-[9.5px] text-slate-500 font-medium pt-1 border-t border-amber-100 flex items-center gap-1">
+                        <i class="fa-solid fa-users text-[8.5px] text-amber-600"></i>
+                        <span>Participación (+${partPts} pts): <strong class="text-slate-800">${otherNames}</strong></span>
+                      </div>
+                    ` : '';
+                  })()}
                 `}
 
                 ${session.resultNotes ? `<p class="text-[10px] text-amber-900/90 italic truncate pt-0.5">"${session.resultNotes}"</p>` : ''}
@@ -4543,6 +4561,8 @@ const app = {
     const sessions = db.getSessions();
     const games = db.getGames();
 
+    // El podio (1º, 2º y 3º) recibe exclusivamente sus puntos de podio (NO se le suma participación).
+    // Los jugadores del 4º lugar en adelante reciben puntos de participación.
     const WEIGHT_POINTS = {
       heavy: { first: 12, second: 7, third: 4, part: 2 },
       medium: { first: 7, second: 4, third: 2, part: 1 },
@@ -4558,6 +4578,10 @@ const app = {
     let attended = 0;
 
     sessions.forEach(s => {
+      // ÚNICAMENTE computar partidas que ya concluyeron y tienen resultados/podio oficiales guardados
+      const hasResults = Boolean(s.winnerId || (s.gameWeight === 'coop' && s.coopOutcome));
+      if (!hasResults) return;
+
       const attendees = Array.isArray(s.attendees) ? s.attendees : [];
       const isAttendee = attendees.some(a => a.friendId === friendId && a.status === 'yes');
       const isWinner = s.winnerId === friendId;
@@ -4595,15 +4619,15 @@ const app = {
         const pts = WEIGHT_POINTS[weight] || WEIGHT_POINTS.medium;
         if (isWinner) {
           firstPlaces++;
-          points += pts.first;
+          points += pts.first; // 1º Lugar recibe solo puntos de podio (no se le añade participación)
         } else if (isSecond) {
           secondPlaces++;
-          points += pts.second;
+          points += pts.second; // 2º Lugar recibe solo puntos de podio (no se le añade participación)
         } else if (isThird) {
           thirdPlaces++;
-          points += pts.third;
+          points += pts.third; // 3º Lugar recibe solo puntos de podio (no se le añade participación)
         } else {
-          points += pts.part;
+          points += pts.part; // Del 4º lugar hacia abajo reciben puntos de participación
         }
       }
     });
@@ -4730,6 +4754,7 @@ const app = {
     // Update live points preview
     if (!previewContainer) return;
 
+    // El podio recibe solo puntos de podio (sin sumar participación). Quienes quedan fuera reciben puntos de participación.
     const WEIGHT_POINTS = {
       heavy: { first: 12, second: 7, third: 4, part: 2 },
       medium: { first: 7, second: 4, third: 2, part: 1 },
@@ -4782,7 +4807,7 @@ const app = {
           <div class="flex items-center justify-between text-[11px] py-1 border-b border-slate-100 last:border-0">
             <div class="flex items-center gap-1.5 font-bold text-slate-800">
               <span>${p.name}</span>
-              <span class="text-[9.5px] ${isPodium ? 'font-black text-amber-700' : 'text-slate-400 font-medium'}">(${roleBadge})</span>
+              <span class="text-[9.5px] ${isPodium ? 'font-black text-amber-700' : 'text-slate-500 font-medium'}">(${roleBadge})</span>
             </div>
             <span class="font-black ${isPodium ? 'text-amber-800 bg-amber-50 border-amber-200' : 'text-slate-600 bg-slate-100 border-slate-200'} px-2 py-0.5 rounded-md border text-[10px]">+${awarded} pts</span>
           </div>
@@ -4867,6 +4892,19 @@ const app = {
       }
     }
 
+    // Puntos obtenidos en la partida (puntos del juego / PV)
+    const firstScoreInput = document.getElementById('results-first-score');
+    if (firstScoreInput) firstScoreInput.value = session.firstPlaceScore || '';
+
+    const secondScoreInput = document.getElementById('results-second-score');
+    if (secondScoreInput) secondScoreInput.value = session.secondPlaceScore || '';
+
+    const thirdScoreInput = document.getElementById('results-third-score');
+    if (thirdScoreInput) thirdScoreInput.value = session.thirdPlaceScore || '';
+
+    const coopScoreInput = document.getElementById('results-coop-score');
+    if (coopScoreInput) coopScoreInput.value = session.coopScore || '';
+
     // Preselect weight
     let weight = session.gameWeight;
     if (!weight) {
@@ -4910,6 +4948,23 @@ const app = {
     session.gameWeight = weight;
     if (notes) session.resultNotes = notes;
     else delete session.resultNotes;
+
+    // Guardar puntos obtenidos en la partida (opcionales)
+    const firstScore = (document.getElementById('results-first-score')?.value || '').trim();
+    if (firstScore) session.firstPlaceScore = firstScore;
+    else delete session.firstPlaceScore;
+
+    const secondScore = (document.getElementById('results-second-score')?.value || '').trim();
+    if (secondScore) session.secondPlaceScore = secondScore;
+    else delete session.secondPlaceScore;
+
+    const thirdScore = (document.getElementById('results-third-score')?.value || '').trim();
+    if (thirdScore) session.thirdPlaceScore = thirdScore;
+    else delete session.thirdPlaceScore;
+
+    const coopScore = (document.getElementById('results-coop-score')?.value || '').trim();
+    if (coopScore) session.coopScore = coopScore;
+    else delete session.coopScore;
 
     if (weight === 'coop') {
       const outcome = document.getElementById('results-coop-outcome')?.value || 'win';
@@ -4985,7 +5040,7 @@ const app = {
 
       msg = `🤝 *¡MISIÓN COOPERATIVA EN EL CLUB!* 🤝%0A%0A` +
         `🔥 *Juego:* *${game?.title || 'Juego de mesa'}* (${weightLabel})%0A` +
-        `🎯 *Resultado:* ${isWin ? '🏆 *¡VICTORIA DEL EQUIPO!* (+8 pts c/u)' : '💀 *¡DERROTA ANTE EL JUEGO!* (+2 pts c/u)'}%0A` +
+        `🎯 *Resultado:* ${isWin ? `🏆 *¡VICTORIA DEL EQUIPO!* ${session.coopScore ? `(${session.coopScore}) ` : ''}(+8 pts c/u)` : `💀 *¡DERROTA ANTE EL JUEGO!* ${session.coopScore ? `(${session.coopScore}) ` : ''}(+2 pts c/u por participar)`}%0A` +
         `📅 *Fecha:* ${session.date}%0A` +
         (teamNames ? `👥 *Escuadrón en mesa:* ${teamNames}%0A` : '') +
         (session.resultNotes ? `💬 *Crónica:* "${session.resultNotes}"%0A%0A` : '%0A') +
@@ -5012,13 +5067,17 @@ const app = {
         .filter(Boolean)
         .join(', ');
 
+      const firstScoreTxt = session.firstPlaceScore ? ` (${session.firstPlaceScore} pts en partida)` : '';
+      const secondScoreTxt = session.secondPlaceScore ? ` (${session.secondPlaceScore} pts en partida)` : '';
+      const thirdScoreTxt = session.thirdPlaceScore ? ` (${session.thirdPlaceScore} pts en partida)` : '';
+
       msg = `🏆👑 *¡HABEMUS PODIO OFICIAL EN EL CLUB!* 👑🏆%0A%0A` +
         `🔥 *Juego:* *${game?.title || 'Juego de mesa'}* (${weightLabel})%0A` +
-        `🥇 *1º Lugar (Campeón):* *${winner.name}* (+${pts.first} pts)%0A` +
-        (second ? `🥈 *2º Lugar:* ${second.name} (+${pts.second} pts)%0A` : '') +
-        (third ? `🥉 *3º Lugar:* ${third.name} (+${pts.third} pts)%0A` : '') +
+        `🥇 *1º Lugar (Campeón):* *${winner.name}*${firstScoreTxt} (+${pts.first} pts de liga)%0A` +
+        (second ? `🥈 *2º Lugar:* ${second.name}${secondScoreTxt} (+${pts.second} pts de liga)%0A` : '') +
+        (third ? `🥉 *3º Lugar:* ${third.name}${thirdScoreTxt} (+${pts.third} pts de liga)%0A` : '') +
         `📅 *Fecha:* ${session.date}%0A` +
-        (otherAttendees ? `👥 *Participantes:* ${otherAttendees} (+${pts.part} pts c/u)%0A` : '') +
+        (otherAttendees ? `👥 *Participantes:* ${otherAttendees} (+${pts.part} pts c/u por participación)%0A` : '') +
         (session.resultNotes ? `💬 *Crónica:* "${session.resultNotes}"%0A%0A` : '%0A') +
         `🎖️ _¡Los Puntos de Liga ya están registrados en el Salón de la Fama del Club!_%0A%0A` +
         `📲 *Revisa el ranking actualizado aquí:*%0A${encodeURIComponent(shareUrl)}`;
@@ -5214,7 +5273,7 @@ const app = {
       const owner = friends.find(f => f.id === game.ownerId) || { name: 'Comunitario' };
       const coverHtml = this.getGameCoverHtml(game, 'card');
       const descSnippet = game.description || 'Sin reseña registrada. Toca modificar para agregar una.';
-      const timesPlayed = sessions.filter(s => s.gameId === game.id && (s.winnerId || ((s.date || '').split('T')[0] < todayStr))).length;
+      const timesPlayed = sessions.filter(s => s.gameId === game.id && Boolean(s.winnerId || (s.gameWeight === 'coop' && s.coopOutcome))).length;
       const canEdit = this.canEditGame(game);
       const isRecent = this.isGameRecent(game);
 
