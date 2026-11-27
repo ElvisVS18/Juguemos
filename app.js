@@ -3707,9 +3707,13 @@ const app = {
       const now = new Date();
       const isStartedOrPast = !isNaN(sessionDateTime.getTime()) ? (now >= sessionDateTime) : isPastDate;
       const winnerFriend = session.winnerId ? friends.find(f => f.id === session.winnerId) : null;
+      const secondFriend = session.secondPlaceId ? friends.find(f => f.id === session.secondPlaceId) : null;
+      const thirdFriend = session.thirdPlaceId ? friends.find(f => f.id === session.thirdPlaceId) : null;
       const creatorId = session.creatorId || (session.attendees && session.attendees[0] ? session.attendees[0].friendId : null);
       const creatorFriend = friends.find(f => f.id === creatorId);
       const canManage = this.canManageSession(session);
+      const isCoop = session.gameWeight === 'coop';
+      const isCoopWin = isCoop && session.coopOutcome !== 'loss';
 
       return `
         <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col ${isPastDate ? 'opacity-90' : ''}">
@@ -3725,8 +3729,10 @@ const app = {
                 <i class="fa-solid fa-clock text-amber-300"></i> ~${game.durationMin} min
               </span>
 
-              ${session.winnerId
-                ? `<span class="bg-amber-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-amber-300/40"><i class="fa-solid fa-crown text-[9px] text-amber-200"></i> Ganó: ${(winnerFriend ? winnerFriend.name.split(' ')[0] : 'Registrado')}</span>`
+              ${session.winnerId || (isCoop && session.coopOutcome)
+                ? isCoop 
+                  ? `<span class="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-emerald-300/40">${isCoopWin ? '🏆 Victoria (+8 pts)' : '💀 Derrota (+2 pts)'}</span>`
+                  : `<span class="bg-amber-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-amber-300/40"><i class="fa-solid fa-crown text-[9px] text-amber-200"></i> 1º: ${(winnerFriend ? winnerFriend.name.split(' ')[0] : 'Registrado')}</span>`
                 : isStartedOrPast
                   ? `<span class="bg-indigo-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 animate-pulse"><i class="fa-solid fa-trophy text-[9px] text-amber-300"></i> Partida Concluida</span>`
                   : isFull 
@@ -3806,31 +3812,66 @@ const app = {
               </div>
             ` : ''}
 
-            <!-- Winner Showcase Banner (if winner recorded) -->
-            ${session.winnerId ? `
-              <div class="p-3 rounded-2xl bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50 border border-amber-200 shadow-2xs flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2.5 min-w-0">
-                  <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center text-base shadow-xs shrink-0">
-                    <i class="fa-solid fa-crown text-amber-100"></i>
+            <!-- Winner Showcase Banner (if winner or coop outcome recorded) -->
+            ${(session.winnerId || (isCoop && session.coopOutcome)) ? `
+              <div class="p-3 rounded-2xl bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50 border border-amber-200 shadow-2xs space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs">🏆</span>
+                    <span class="text-[10px] font-black uppercase text-amber-800 tracking-wider">
+                      ${isCoop ? '🤝 Misión Cooperativa' : '👑 Podio Oficial de la Partida'}
+                    </span>
+                    <span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-white text-slate-700 border border-amber-200 shrink-0">
+                      ${session.gameWeight === 'heavy' ? '🐘 Pesado' : session.gameWeight === 'light' ? '🐰 Ligero' : session.gameWeight === 'coop' ? '🤝 Coop' : '🦊 Mediano'}
+                    </span>
                   </div>
-                  <div class="min-w-0">
-                    <span class="text-[9px] font-black uppercase text-amber-700 tracking-wider">🏆 Victoria Registrada</span>
-                    <div class="flex items-center gap-1.5 text-xs font-black text-amber-950 truncate">
-                      ${getMeepleSvg(winnerFriend || 'bg-amber-500', 16)}
-                      <span class="truncate">${winnerFriend ? winnerFriend.name : 'Ganador'}</span>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button onclick="app.shareWinnerToWhatsapp('${session.id}')" title="Celebrar victoria en WhatsApp" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-[10.5px] rounded-xl shadow-xs flex items-center gap-1 transition-colors">
+                      <i class="fa-brands fa-whatsapp text-xs"></i>
+                      <span>Celebrar</span>
+                    </button>
+                    <button onclick="app.openSessionResultsModal('${session.id}')" title="Modificar resultados" class="w-7 h-7 rounded-lg bg-amber-100 hover:bg-amber-200 active:bg-amber-300 text-amber-800 flex items-center justify-center text-xs transition-colors">
+                      <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                    </button>
+                  </div>
+                </div>
+
+                ${isCoop ? `
+                  <div class="flex items-center gap-2 text-xs font-bold ${isCoopWin ? 'text-emerald-900' : 'text-slate-700'}">
+                    <span>${isCoopWin ? '🏆 ¡El equipo venció al juego!' : '💀 ¡El juego venció al equipo!'}</span>
+                    <span class="text-[10px] font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">${isCoopWin ? '+8 pts c/u' : '+2 pts c/u'}</span>
+                  </div>
+                ` : `
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-0.5">
+                    <div class="flex items-center gap-1.5 p-1.5 bg-white/80 rounded-xl border border-amber-200/80 text-xs">
+                      <span class="text-sm">🥇</span>
+                      <div class="min-w-0 flex-1 truncate">
+                        <span class="font-black text-slate-900">${winnerFriend ? winnerFriend.name.split(' ')[0] : 'Ganador'}</span>
+                        <span class="text-[9.5px] font-black text-amber-700 ml-1">+${session.gameWeight === 'heavy' ? 12 : session.gameWeight === 'light' ? 3 : 7} pts</span>
+                      </div>
                     </div>
-                    ${session.resultNotes ? `<p class="text-[10px] text-amber-800 italic truncate mt-0.5">"${session.resultNotes}"</p>` : ''}
+                    ${secondFriend ? `
+                    <div class="flex items-center gap-1.5 p-1.5 bg-white/70 rounded-xl border border-slate-200 text-xs">
+                      <span class="text-sm">🥈</span>
+                      <div class="min-w-0 flex-1 truncate">
+                        <span class="font-extrabold text-slate-800">${secondFriend.name.split(' ')[0]}</span>
+                        <span class="text-[9.5px] font-bold text-slate-600 ml-1">+${session.gameWeight === 'heavy' ? 7 : session.gameWeight === 'light' ? 1 : 4} pts</span>
+                      </div>
+                    </div>
+                    ` : ''}
+                    ${thirdFriend ? `
+                    <div class="flex items-center gap-1.5 p-1.5 bg-white/70 rounded-xl border border-slate-200 text-xs">
+                      <span class="text-sm">🥉</span>
+                      <div class="min-w-0 flex-1 truncate">
+                        <span class="font-extrabold text-slate-800">${thirdFriend.name.split(' ')[0]}</span>
+                        <span class="text-[9.5px] font-bold text-amber-800 ml-1">+${session.gameWeight === 'heavy' ? 4 : session.gameWeight === 'light' ? 0 : 2} pts</span>
+                      </div>
+                    </div>
+                    ` : ''}
                   </div>
-                </div>
-                <div class="flex items-center gap-1 shrink-0">
-                  <button onclick="app.shareWinnerToWhatsapp('${session.id}')" title="Celebrar victoria en WhatsApp" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-[11px] rounded-xl shadow-xs flex items-center gap-1 transition-colors">
-                    <i class="fa-brands fa-whatsapp text-xs"></i>
-                    <span>Celebrar</span>
-                  </button>
-                  <button onclick="app.openSessionResultsModal('${session.id}')" title="Modificar ganador" class="w-7 h-7 rounded-lg bg-amber-100 hover:bg-amber-200 active:bg-amber-300 text-amber-800 flex items-center justify-center text-xs transition-colors">
-                    <i class="fa-solid fa-pen-to-square text-[10px]"></i>
-                  </button>
-                </div>
+                `}
+
+                ${session.resultNotes ? `<p class="text-[10px] text-amber-900/90 italic truncate pt-0.5">"${session.resultNotes}"</p>` : ''}
               </div>
             ` : isStartedOrPast ? `
               <!-- Register Winner Prompt (Partida en curso o pasada sin ganador) -->
@@ -3840,13 +3881,13 @@ const app = {
                     <i class="fa-solid fa-trophy text-amber-100"></i>
                   </div>
                   <div>
-                    <h4 class="font-bold text-xs text-slate-900 leading-tight">¿Quién se llevó la victoria?</h4>
-                    <p class="text-[10px] text-slate-500">La partida ya comenzó. Registra al ganador para las estadísticas.</p>
+                    <h4 class="font-bold text-xs text-slate-900 leading-tight">¿Cómo quedó el podio de la partida?</h4>
+                    <p class="text-[10px] text-slate-500">Registra el 1º, 2º y 3º lugar para otorgar los puntos del club.</p>
                   </div>
                 </div>
                 <button onclick="app.openSessionResultsModal('${session.id}')" class="w-full sm:w-auto px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 active:from-amber-600 active:to-amber-700 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 shrink-0 transition-transform active:scale-95">
                   <i class="fa-solid fa-crown text-amber-200 text-xs"></i>
-                  <span>Registrar Ganador</span>
+                  <span>Registrar Podio y Puntos</span>
                 </button>
               </div>
             ` : ''}
@@ -4443,14 +4484,17 @@ const app = {
 
     const stats = this.getSessionAttendeeStats(session);
     const game = stats.game;
-    const spotsLeft = stats.spotsLeft;
+    const maxPlayers = stats.maxPlayers;
+    // Filtrar al amigo al que se le envía la invitación para que el cálculo de cupos libres sea siempre exacto
+    const confirmed = stats.confirmed.filter(a => a.friendId !== friendId);
+    const spotsLeft = Math.max(0, maxPlayers - confirmed.length);
     const shareUrl = this.getShareUrl();
 
     let cleanTime = session.time || '19:30';
     if (cleanTime.includes('T')) cleanTime = cleanTime.split('T')[1].substring(0, 5);
 
     const firstName = (friend.name || '').split(' ')[0] || 'Amigo';
-    const spotsText = spotsLeft === 1 ? 'Queda 1 lugar' : spotsLeft > 1 ? `Quedan ${spotsLeft} lugares` : 'Mesa llena';
+    const spotsText = spotsLeft > 1 ? `Quedan ${spotsLeft} lugares` : spotsLeft === 1 ? 'Queda 1 último lugar' : 'Mesa llena';
 
     const msg = `🎲 *¡Hola ${firstName}!* 🎲%0A%0A` +
       `Se armó partida de *${game?.title || 'Juego de mesa'}* en el Club:%0A%0A` +
@@ -4492,7 +4536,261 @@ const app = {
     alert(`¡Celular de ${friend.name} guardado con éxito! Ahora puedes invitarle con 1 toque.`);
   },
 
-  /* POST-SESSION RESULTS & WINNER RECORDING */
+  /* ======================================================== */
+  /* CALCULATE PLAYER STATS & LEAGUE POINTS */
+  /* ======================================================== */
+  getPlayerClubStats(friendId) {
+    const sessions = db.getSessions();
+    const games = db.getGames();
+
+    const WEIGHT_POINTS = {
+      heavy: { first: 12, second: 7, third: 4, part: 2 },
+      medium: { first: 7, second: 4, third: 2, part: 1 },
+      light: { first: 3, second: 1, third: 0, part: 0.5 },
+      coop: { win: 8, loss: 2 }
+    };
+
+    let points = 0;
+    let firstPlaces = 0;
+    let secondPlaces = 0;
+    let thirdPlaces = 0;
+    let coopWins = 0;
+    let attended = 0;
+
+    sessions.forEach(s => {
+      const attendees = Array.isArray(s.attendees) ? s.attendees : [];
+      const isAttendee = attendees.some(a => a.friendId === friendId && a.status === 'yes');
+      const isWinner = s.winnerId === friendId;
+      const isSecond = s.secondPlaceId === friendId;
+      const isThird = s.thirdPlaceId === friendId;
+
+      if (!isAttendee && !isWinner && !isSecond && !isThird) return;
+
+      attended++;
+
+      // If no explicit weight was saved, infer it based on game duration or cooperative keywords
+      let weight = s.gameWeight;
+      const game = games.find(g => g.id === s.gameId);
+      if (!weight) {
+        const titleAndDesc = ((game?.title || '') + ' ' + (game?.description || '')).toLowerCase();
+        if (/cooperativo|coop|pandemic|arkham|eldritch|spirit island|zombicide/i.test(titleAndDesc)) {
+          weight = 'coop';
+        } else {
+          const dur = parseInt(game?.durationMin) || 60;
+          if (dur >= 90) weight = 'heavy';
+          else if (dur <= 35) weight = 'light';
+          else weight = 'medium';
+        }
+      }
+
+      if (weight === 'coop') {
+        const isWin = s.coopOutcome !== 'loss';
+        if (isWin) {
+          coopWins++;
+          points += WEIGHT_POINTS.coop.win;
+        } else {
+          points += WEIGHT_POINTS.coop.loss;
+        }
+      } else {
+        const pts = WEIGHT_POINTS[weight] || WEIGHT_POINTS.medium;
+        if (isWinner) {
+          firstPlaces++;
+          points += pts.first;
+        } else if (isSecond) {
+          secondPlaces++;
+          points += pts.second;
+        } else if (isThird) {
+          thirdPlaces++;
+          points += pts.third;
+        } else {
+          points += pts.part;
+        }
+      }
+    });
+
+    const wins = firstPlaces + coopWins;
+    const winRate = attended > 0 ? Math.round((wins / attended) * 100) : 0;
+
+    return {
+      points: Math.round(points * 10) / 10,
+      firstPlaces,
+      secondPlaces,
+      thirdPlaces,
+      coopWins,
+      attended,
+      wins,
+      winRate
+    };
+  },
+
+  /* ======================================================== */
+  /* POST-SESSION RESULTS & PODIUM MANAGEMENT */
+  /* ======================================================== */
+  setResultsWeight(weight) {
+    const hidden = document.getElementById('results-game-weight');
+    if (hidden) hidden.value = weight;
+
+    const weights = ['heavy', 'medium', 'light', 'coop'];
+    weights.forEach(w => {
+      const btn = document.getElementById(`btn-weight-${w}`);
+      if (!btn) return;
+      if (w === weight) {
+        btn.className = `p-2.5 rounded-2xl border text-left transition-all ${
+          w === 'heavy' ? 'bg-amber-50/90 border-amber-500 ring-2 ring-amber-300' :
+          w === 'medium' ? 'bg-indigo-50/90 border-brand-500 ring-2 ring-brand-300' :
+          w === 'light' ? 'bg-teal-50/90 border-teal-500 ring-2 ring-teal-300' :
+          'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-300'
+        }`;
+      } else {
+        btn.className = 'p-2.5 rounded-2xl border border-slate-200 bg-white hover:border-slate-300 text-left transition-all';
+      }
+    });
+
+    const compBox = document.getElementById('results-competitive-box');
+    const coopBox = document.getElementById('results-coop-box');
+    if (weight === 'coop') {
+      if (compBox) compBox.classList.add('hidden');
+      if (coopBox) coopBox.classList.remove('hidden');
+    } else {
+      if (compBox) compBox.classList.remove('hidden');
+      if (coopBox) coopBox.classList.add('hidden');
+
+      const bFirst = document.getElementById('badge-points-first');
+      const bSec = document.getElementById('badge-points-second');
+      const bThird = document.getElementById('badge-points-third');
+      if (weight === 'heavy') {
+        if (bFirst) bFirst.textContent = '+12 pts';
+        if (bSec) bSec.textContent = '+7 pts';
+        if (bThird) bThird.textContent = '+4 pts';
+      } else if (weight === 'light') {
+        if (bFirst) bFirst.textContent = '+3 pts';
+        if (bSec) bSec.textContent = '+1 pt';
+        if (bThird) bThird.textContent = '+0 pts';
+      } else {
+        if (bFirst) bFirst.textContent = '+7 pts';
+        if (bSec) bSec.textContent = '+4 pts';
+        if (bThird) bThird.textContent = '+2 pts';
+      }
+    }
+
+    this.updateResultsPodiumSelectors();
+  },
+
+  setResultsCoopOutcome(outcome) {
+    const hidden = document.getElementById('results-coop-outcome');
+    if (hidden) hidden.value = outcome;
+
+    const btnWin = document.getElementById('btn-coop-win');
+    const btnLoss = document.getElementById('btn-coop-loss');
+    if (outcome === 'win') {
+      if (btnWin) btnWin.className = 'p-3 rounded-2xl border text-center transition-all bg-emerald-50 border-emerald-400 ring-2 ring-emerald-300 text-emerald-950 font-black';
+      if (btnLoss) btnLoss.className = 'p-3 rounded-2xl border text-center transition-all bg-white border-slate-200 text-slate-700 font-bold hover:border-rose-300';
+    } else {
+      if (btnWin) btnWin.className = 'p-3 rounded-2xl border text-center transition-all bg-white border-slate-200 text-slate-700 font-bold hover:border-emerald-300';
+      if (btnLoss) btnLoss.className = 'p-3 rounded-2xl border text-center transition-all bg-rose-50 border-rose-400 ring-2 ring-rose-300 text-rose-950 font-black';
+    }
+
+    this.updateResultsPodiumSelectors();
+  },
+
+  updateResultsPodiumSelectors() {
+    const sessionId = document.getElementById('results-session-id')?.value;
+    const session = db.getSessions().find(s => s.id === sessionId);
+    const friends = db.getFriends();
+    const weight = document.getElementById('results-game-weight')?.value || 'medium';
+    const firstSelect = document.getElementById('results-first-place');
+    const secondSelect = document.getElementById('results-second-place');
+    const thirdSelect = document.getElementById('results-third-place');
+    const previewContainer = document.getElementById('results-live-preview');
+
+    const firstVal = firstSelect?.value || '';
+
+    // Disable duplicate selections in second and third place
+    if (secondSelect) {
+      Array.from(secondSelect.options).forEach(opt => {
+        if (!opt.value) return;
+        opt.disabled = (opt.value === firstVal);
+      });
+      if (secondSelect.value && secondSelect.value === firstVal) {
+        secondSelect.value = '';
+      }
+    }
+
+    if (thirdSelect) {
+      const secondVal = secondSelect?.value || '';
+      Array.from(thirdSelect.options).forEach(opt => {
+        if (!opt.value) return;
+        opt.disabled = (opt.value === firstVal || (secondVal && opt.value === secondVal));
+      });
+      if (thirdSelect.value && (thirdSelect.value === firstVal || (secondVal && thirdSelect.value === secondVal))) {
+        thirdSelect.value = '';
+      }
+    }
+
+    // Update live points preview
+    if (!previewContainer) return;
+
+    const WEIGHT_POINTS = {
+      heavy: { first: 12, second: 7, third: 4, part: 2 },
+      medium: { first: 7, second: 4, third: 2, part: 1 },
+      light: { first: 3, second: 1, third: 0, part: 0.5 },
+      coop: { win: 8, loss: 2 }
+    };
+
+    const attendees = session && Array.isArray(session.attendees) ? session.attendees.filter(a => a.status === 'yes') : [];
+    let playerList = attendees.map(a => friends.find(f => f.id === a.friendId)).filter(Boolean);
+    if (playerList.length === 0) {
+      playerList = friends.slice(0, 4);
+    }
+
+    if (weight === 'coop') {
+      const outcome = document.getElementById('results-coop-outcome')?.value || 'win';
+      const pts = outcome === 'win' ? WEIGHT_POINTS.coop.win : WEIGHT_POINTS.coop.loss;
+      previewContainer.innerHTML = playerList.map(p => `
+        <div class="flex items-center justify-between text-[11px] py-1 border-b border-slate-100 last:border-0">
+          <div class="flex items-center gap-1.5 font-bold text-slate-800">
+            <span>${p.name}</span>
+            <span class="text-[9px] text-slate-400 font-medium">(Misión en equipo)</span>
+          </div>
+          <span class="font-black ${outcome === 'win' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-600 bg-slate-100 border-slate-200'} px-2 py-0.5 rounded-md border text-[10px]">+${pts} pts</span>
+        </div>
+      `).join('');
+    } else {
+      const pts = WEIGHT_POINTS[weight] || WEIGHT_POINTS.medium;
+      const secondVal = secondSelect?.value || '';
+      const thirdVal = thirdSelect?.value || '';
+
+      previewContainer.innerHTML = playerList.map(p => {
+        let roleBadge = '';
+        let awarded = pts.part;
+        if (p.id === firstVal) {
+          roleBadge = '🥇 1º Lugar';
+          awarded = pts.first;
+        } else if (p.id === secondVal) {
+          roleBadge = '🥈 2º Lugar';
+          awarded = pts.second;
+        } else if (p.id === thirdVal) {
+          roleBadge = '🥉 3º Lugar';
+          awarded = pts.third;
+        } else {
+          roleBadge = '👥 Participación';
+          awarded = pts.part;
+        }
+
+        const isPodium = p.id === firstVal || p.id === secondVal || p.id === thirdVal;
+        return `
+          <div class="flex items-center justify-between text-[11px] py-1 border-b border-slate-100 last:border-0">
+            <div class="flex items-center gap-1.5 font-bold text-slate-800">
+              <span>${p.name}</span>
+              <span class="text-[9.5px] ${isPodium ? 'font-black text-amber-700' : 'text-slate-400 font-medium'}">(${roleBadge})</span>
+            </div>
+            <span class="font-black ${isPodium ? 'text-amber-800 bg-amber-50 border-amber-200' : 'text-slate-600 bg-slate-100 border-slate-200'} px-2 py-0.5 rounded-md border text-[10px]">+${awarded} pts</span>
+          </div>
+        `;
+      }).join('');
+    }
+  },
+
   openSessionResultsModal(sessionId) {
     const sessions = db.getSessions();
     const session = sessions.find(s => s.id === sessionId);
@@ -4534,25 +4832,61 @@ const app = {
       candidates = friends;
     }
 
-    // Render winner selector radio pills
-    const selectorContainer = document.getElementById('results-winner-selector');
-    if (selectorContainer) {
-      selectorContainer.innerHTML = candidates.map(f => {
-        const isSelected = session.winnerId ? session.winnerId === f.id : false;
-        return `
-          <label class="p-2.5 rounded-2xl border ${isSelected ? 'border-amber-500 bg-amber-50/70 ring-2 ring-amber-300' : 'border-slate-200 bg-white hover:border-amber-300'} cursor-pointer flex items-center gap-2.5 transition-all">
-            <input type="radio" name="session-winner-choice" value="${f.id}" ${isSelected ? 'checked' : ''} class="sr-only" onchange="app.highlightWinnerRadio(this)">
-            <div class="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-              ${getMeepleSvg(f, 20)}
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="font-extrabold text-xs text-slate-900 truncate">${f.name}</div>
-              <div class="text-[9px] text-slate-400 font-bold">Jugador</div>
-            </div>
-            <i class="fa-solid fa-crown text-amber-500 text-sm ${isSelected ? 'block' : 'hidden'} winner-check-icon"></i>
-          </label>
-        `;
-      }).join('');
+    // Populate 1st, 2nd, 3rd place selects
+    const firstSelect = document.getElementById('results-first-place');
+    const secondSelect = document.getElementById('results-second-place');
+    const thirdSelect = document.getElementById('results-third-place');
+
+    if (firstSelect) {
+      firstSelect.innerHTML = `
+        <option value="" disabled ${!session.winnerId ? 'selected' : ''}>— Selecciona al Ganador / Campeón —</option>
+        ${candidates.map(f => `<option value="${f.id}" ${session.winnerId === f.id ? 'selected' : ''}>🥇 ${f.name}</option>`).join('')}
+      `;
+      if (!session.winnerId && candidates.length > 0) {
+        firstSelect.value = candidates[0].id;
+      }
+    }
+
+    if (secondSelect) {
+      secondSelect.innerHTML = `
+        <option value="">— Ninguno / No aplica —</option>
+        ${candidates.map(f => `<option value="${f.id}" ${session.secondPlaceId === f.id ? 'selected' : ''}>🥈 ${f.name}</option>`).join('')}
+      `;
+      if (!session.secondPlaceId && candidates.length > 1) {
+        secondSelect.value = candidates[1].id;
+      }
+    }
+
+    if (thirdSelect) {
+      thirdSelect.innerHTML = `
+        <option value="">— Ninguno / No aplica —</option>
+        ${candidates.map(f => `<option value="${f.id}" ${session.thirdPlaceId === f.id ? 'selected' : ''}>🥉 ${f.name}</option>`).join('')}
+      `;
+      if (!session.thirdPlaceId && candidates.length > 2) {
+        thirdSelect.value = candidates[2].id;
+      }
+    }
+
+    // Preselect weight
+    let weight = session.gameWeight;
+    if (!weight) {
+      const titleAndDesc = ((game?.title || '') + ' ' + (game?.description || '')).toLowerCase();
+      if (/cooperativo|coop|pandemic|arkham|eldritch|spirit island|zombicide/i.test(titleAndDesc)) {
+        weight = 'coop';
+      } else {
+        const dur = parseInt(game?.durationMin) || 60;
+        if (dur >= 90) weight = 'heavy';
+        else if (dur <= 35) weight = 'light';
+        else weight = 'medium';
+      }
+    }
+
+    this.setResultsWeight(weight);
+
+    if (session.coopOutcome) {
+      this.setResultsCoopOutcome(session.coopOutcome);
+    } else {
+      this.setResultsCoopOutcome('win');
     }
 
     const notesInput = document.getElementById('results-notes');
@@ -4563,40 +4897,53 @@ const app = {
     this.openModal('modal-session-results');
   },
 
-  highlightWinnerRadio(radioEl) {
-    document.querySelectorAll('#results-winner-selector label').forEach(lbl => {
-      lbl.className = 'p-2.5 rounded-2xl border border-slate-200 bg-white hover:border-amber-300 cursor-pointer flex items-center gap-2.5 transition-all';
-      const icon = lbl.querySelector('.winner-check-icon');
-      if (icon) icon.classList.add('hidden');
-    });
-    const parentLabel = radioEl.closest('label');
-    if (parentLabel) {
-      parentLabel.className = 'p-2.5 rounded-2xl border border-amber-500 bg-amber-50/70 ring-2 ring-amber-300 cursor-pointer flex items-center gap-2.5 transition-all';
-      const icon = parentLabel.querySelector('.winner-check-icon');
-      if (icon) icon.classList.remove('hidden');
-    }
-  },
-
   handleSaveSessionResults(event) {
     event.preventDefault();
     const sessionId = document.getElementById('results-session-id').value;
-    const selectedRadio = document.querySelector('input[name="session-winner-choice"]:checked');
-    if (!selectedRadio) {
-      alert('Por favor selecciona quién ganó la partida tocando sobre su nombre.');
-      return;
-    }
-
-    const winnerId = selectedRadio.value;
-    const notes = (document.getElementById('results-notes')?.value || '').trim();
-
     const sessions = db.getSessions();
     const session = sessions.find(s => s.id === sessionId);
     if (!session) return;
 
-    session.winnerId = winnerId;
+    const weight = document.getElementById('results-game-weight')?.value || 'medium';
+    const notes = (document.getElementById('results-notes')?.value || '').trim();
+
+    session.gameWeight = weight;
     if (notes) session.resultNotes = notes;
+    else delete session.resultNotes;
+
+    if (weight === 'coop') {
+      const outcome = document.getElementById('results-coop-outcome')?.value || 'win';
+      session.coopOutcome = outcome;
+      delete session.winnerId;
+      delete session.secondPlaceId;
+      delete session.thirdPlaceId;
+    } else {
+      const firstVal = document.getElementById('results-first-place')?.value;
+      if (!firstVal) {
+        alert('Por favor selecciona quién obtuvo el 1º Lugar (Campeón).');
+        return;
+      }
+      session.winnerId = firstVal;
+      const secondVal = document.getElementById('results-second-place')?.value;
+      if (secondVal && secondVal !== firstVal) {
+        session.secondPlaceId = secondVal;
+      } else {
+        delete session.secondPlaceId;
+      }
+
+      const thirdVal = document.getElementById('results-third-place')?.value;
+      if (thirdVal && thirdVal !== firstVal && thirdVal !== secondVal) {
+        session.thirdPlaceId = thirdVal;
+      } else {
+        delete session.thirdPlaceId;
+      }
+      delete session.coopOutcome;
+    }
 
     db.saveSessions(sessions);
+    if (db.getGSheetUrl()) {
+      db.pushToGoogleSheets();
+    }
 
     this.closeModal('modal-session-results');
     this.renderSessions();
@@ -4605,65 +4952,109 @@ const app = {
 
     if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
 
-    if (confirm('¡Victoria guardada y sumada a las estadísticas del Club!\n\n¿Deseas enviar el anuncio de celebración a WhatsApp ahora?')) {
+    if (confirm('¡Podio y Puntos Oficiales guardados con éxito!\n\n¿Deseas enviar el anuncio de celebración y podio a WhatsApp ahora?')) {
       this.shareWinnerToWhatsapp(sessionId);
     }
   },
 
+  /* ======================================================== */
   /* WHATSAPP SHARING ENHANCEMENTS */
+  /* ======================================================== */
   shareWinnerToWhatsapp(sessionId) {
     const sessions = db.getSessions();
     const session = sessions.find(s => s.id === sessionId);
-    if (!session || !session.winnerId) return;
+    if (!session) return;
 
     const games = db.getGames();
     const game = games.find(g => g.id === session.gameId);
     const friends = db.getFriends();
-    const winner = friends.find(f => f.id === session.winnerId);
-    if (!winner) return;
-
-    const attendees = Array.isArray(session.attendees) ? session.attendees.filter(a => a.status === 'yes') : [];
-    const attendeeNames = attendees
-      .map(a => friends.find(f => f.id === a.friendId)?.name?.split(' ')[0])
-      .filter(Boolean)
-      .join(', ');
-
     const shareUrl = this.getShareUrl();
 
-    let msg = `🏆👑 *¡HABEMUS GANADOR EN EL CLUB!* 👑🏆%0A%0A` +
-      `🔥 *Juego:* ${game?.title || 'Juego de mesa'}%0A` +
-      `🥇 *Campeón de la partida:* *${winner.name}*%0A` +
-      `📅 *Fecha:* ${session.date}%0A` +
-      (attendeeNames ? `👥 *Rivales en mesa:* ${attendeeNames}%0A` : '') +
-      (session.resultNotes ? `💬 *Crónica:* "${session.resultNotes}"%0A%0A` : '%0A') +
-      `🎖️ _¡La victoria ya está registrada en el Salón de la Fama del Club!_%0A%0A` +
-      `📲 *Revisa el ranking completo aquí:*%0A${encodeURIComponent(shareUrl)}`;
+    const isCoop = session.gameWeight === 'coop';
+    const weightLabel = session.gameWeight === 'heavy' ? '🐘 Pesado (2-4h)' : session.gameWeight === 'light' ? '🐰 Ligero / Party' : session.gameWeight === 'coop' ? '🤝 Cooperativo' : '🦊 Mediano';
+
+    let msg = '';
+
+    if (isCoop) {
+      const isWin = session.coopOutcome !== 'loss';
+      const attendees = Array.isArray(session.attendees) ? session.attendees.filter(a => a.status === 'yes') : [];
+      const teamNames = attendees
+        .map(a => friends.find(f => f.id === a.friendId)?.name?.split(' ')[0])
+        .filter(Boolean)
+        .join(', ');
+
+      msg = `🤝 *¡MISIÓN COOPERATIVA EN EL CLUB!* 🤝%0A%0A` +
+        `🔥 *Juego:* *${game?.title || 'Juego de mesa'}* (${weightLabel})%0A` +
+        `🎯 *Resultado:* ${isWin ? '🏆 *¡VICTORIA DEL EQUIPO!* (+8 pts c/u)' : '💀 *¡DERROTA ANTE EL JUEGO!* (+2 pts c/u)'}%0A` +
+        `📅 *Fecha:* ${session.date}%0A` +
+        (teamNames ? `👥 *Escuadrón en mesa:* ${teamNames}%0A` : '') +
+        (session.resultNotes ? `💬 *Crónica:* "${session.resultNotes}"%0A%0A` : '%0A') +
+        `🎖️ _¡Los Puntos de Liga ya están actualizados en el Salón de la Fama!_%0A%0A` +
+        `📲 *Revisa el ranking completo aquí:*%0A${encodeURIComponent(shareUrl)}`;
+    } else {
+      const winner = friends.find(f => f.id === session.winnerId);
+      if (!winner) return;
+
+      const second = session.secondPlaceId ? friends.find(f => f.id === session.secondPlaceId) : null;
+      const third = session.thirdPlaceId ? friends.find(f => f.id === session.thirdPlaceId) : null;
+
+      const WEIGHT_POINTS = {
+        heavy: { first: 12, second: 7, third: 4, part: 2 },
+        medium: { first: 7, second: 4, third: 2, part: 1 },
+        light: { first: 3, second: 1, third: 0, part: 0.5 }
+      };
+      const pts = WEIGHT_POINTS[session.gameWeight] || WEIGHT_POINTS.medium;
+
+      const attendees = Array.isArray(session.attendees) ? session.attendees.filter(a => a.status === 'yes') : [];
+      const otherAttendees = attendees
+        .filter(a => a.friendId !== session.winnerId && a.friendId !== session.secondPlaceId && a.friendId !== session.thirdPlaceId)
+        .map(a => friends.find(f => f.id === a.friendId)?.name?.split(' ')[0])
+        .filter(Boolean)
+        .join(', ');
+
+      msg = `🏆👑 *¡HABEMUS PODIO OFICIAL EN EL CLUB!* 👑🏆%0A%0A` +
+        `🔥 *Juego:* *${game?.title || 'Juego de mesa'}* (${weightLabel})%0A` +
+        `🥇 *1º Lugar (Campeón):* *${winner.name}* (+${pts.first} pts)%0A` +
+        (second ? `🥈 *2º Lugar:* ${second.name} (+${pts.second} pts)%0A` : '') +
+        (third ? `🥉 *3º Lugar:* ${third.name} (+${pts.third} pts)%0A` : '') +
+        `📅 *Fecha:* ${session.date}%0A` +
+        (otherAttendees ? `👥 *Participantes:* ${otherAttendees} (+${pts.part} pts c/u)%0A` : '') +
+        (session.resultNotes ? `💬 *Crónica:* "${session.resultNotes}"%0A%0A` : '%0A') +
+        `🎖️ _¡Los Puntos de Liga ya están registrados en el Salón de la Fama del Club!_%0A%0A` +
+        `📲 *Revisa el ranking actualizado aquí:*%0A${encodeURIComponent(shareUrl)}`;
+    }
 
     window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
   },
 
   shareLeaderboardToWhatsapp() {
     const friends = db.getFriends();
-    const sessions = db.getSessions();
     const shareUrl = this.getShareUrl();
 
     const ranked = friends.map(f => {
-      const wins = sessions.filter(s => s.winnerId === f.id).length;
-      const attended = sessions.filter(s => s.attendees && s.attendees.some(a => a.friendId === f.id && a.status === 'yes')).length;
-      return { name: f.name, wins, attended };
-    }).sort((a, b) => b.wins - a.wins || b.attended - a.attended);
+      const stats = this.getPlayerClubStats(f.id);
+      return {
+        name: f.name,
+        points: stats.points,
+        wins: stats.wins,
+        first: stats.firstPlaces,
+        second: stats.secondPlaces,
+        third: stats.thirdPlaces,
+        attended: stats.attended
+      };
+    }).sort((a, b) => b.points - a.points || b.wins - a.wins || b.attended - a.attended);
 
     const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
     let rows = ranked.map((r, i) => {
       const medal = medals[i] || '🎖️';
-      return `${medal} *${r.name}* - ${r.wins} victoria${r.wins !== 1 ? 's' : ''} (${r.attended} partida${r.attended !== 1 ? 's' : ''})`;
+      return `${medal} *${r.name}* - *${r.points} pts* (${r.wins} vict. • 🥈x${r.second} • 🥉x${r.third})`;
     }).join('%0A');
 
-    let msg = `🏆 *SALÓN DE LA FAMA - RANKING DEL CLUB* 🏆%0A%0A` +
-      `Así van las posiciones en la mesa de juegos:%0A%0A` +
+    let msg = `🏆 *SALÓN DE LA FAMA - TABLA DE POSICIONES* 🏆%0A%0A` +
+      `Así va la Liga de Juegos de Mesa del Club:%0A%0A` +
       rows + `%0A%0A` +
-      `⚔️ ¿Quién desafiará al líder en el próximo encuentro?%0A%0A` +
+      `⚔️ ¿Quién desafiará la cima en el próximo encuentro?%0A%0A` +
       `📲 *Entra al club para organizar la revancha:*%0A${encodeURIComponent(shareUrl)}`;
 
     window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
@@ -5066,21 +5457,18 @@ const app = {
       return;
     }
 
-    const totalWins = sessions.filter(s => s.winnerId).length;
-
     const friendsWithStats = friends.map(f => {
       const owned = games.filter(g => g.ownerId === f.id).length;
-      const attended = sessions.filter(s => s.attendees && s.attendees.some(a => a.friendId === f.id && a.status === 'yes')).length;
-      const wins = sessions.filter(s => s.winnerId === f.id).length;
-      const winRate = attended > 0 ? Math.round((wins / attended) * 100) : 0;
-      return { ...f, owned, attended, wins, winRate };
+      const stats = this.getPlayerClubStats(f.id);
+      return { ...f, owned, ...stats };
     });
 
-    // Sort by wins descending, then winRate descending, then attended descending
-    const rankedFriends = [...friendsWithStats].sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.attended - a.attended);
+    // Sort primarily by Liga points descending, then wins, then winRate, then attended
+    const rankedFriends = [...friendsWithStats].sort((a, b) => b.points - a.points || b.wins - a.wins || b.winRate - a.winRate || b.attended - a.attended);
+    const hasAnyActivity = rankedFriends.some(f => f.points > 0 || f.attended > 0 || f.wins > 0);
 
     let podiumHtml = '';
-    if (totalWins > 0) {
+    if (hasAnyActivity) {
       const top1 = rankedFriends[0];
       const top2 = rankedFriends.length > 1 ? rankedFriends[1] : null;
       const top3 = rankedFriends.length > 2 ? rankedFriends[2] : null;
@@ -5103,7 +5491,8 @@ const app = {
               <span class="text-xs font-black text-slate-200">🥈 2º</span>
               <div class="my-1.5">${top2 ? getMeepleSvg(top2, 24) : '—'}</div>
               <div class="font-extrabold text-xs truncate w-full">${top2 ? top2.name.split(' ')[0] : '—'}</div>
-              <div class="text-[10px] text-amber-200 font-bold">${top2 ? `${top2.wins} vict.` : '0'}</div>
+              <div class="text-[12px] text-amber-200 font-black">${top2 ? `${top2.points} pts` : '0 pts'}</div>
+              <div class="text-[9px] text-amber-100/80 font-bold">${top2 ? `${top2.wins} vict.` : ''}</div>
             </div>
 
             <!-- 1st Place (Champion) -->
@@ -5112,7 +5501,8 @@ const app = {
               <span class="text-xs font-black text-amber-100">🥇 1º</span>
               <div class="my-1.5 scale-110">${top1 ? getMeepleSvg(top1, 28) : '—'}</div>
               <div class="font-black text-xs truncate w-full">${top1 ? top1.name.split(' ')[0] : '—'}</div>
-              <div class="text-[11px] text-amber-100 font-black">${top1 ? `${top1.wins} victorias` : '0'}</div>
+              <div class="text-[14px] text-amber-100 font-black">${top1 ? `${top1.points} pts` : '0 pts'}</div>
+              <div class="text-[9.5px] text-amber-200 font-bold">${top1 ? `${top1.wins} victorias` : ''}</div>
             </div>
 
             <!-- 3rd Place -->
@@ -5120,21 +5510,27 @@ const app = {
               <span class="text-xs font-black text-amber-200/90">🥉 3º</span>
               <div class="my-1.5">${top3 ? getMeepleSvg(top3, 24) : '—'}</div>
               <div class="font-extrabold text-xs truncate w-full">${top3 ? top3.name.split(' ')[0] : '—'}</div>
-              <div class="text-[10px] text-amber-200 font-bold">${top3 ? `${top3.wins} vict.` : '0'}</div>
+              <div class="text-[12px] text-amber-200 font-black">${top3 ? `${top3.points} pts` : '0 pts'}</div>
+              <div class="text-[9px] text-amber-100/80 font-bold">${top3 ? `${top3.wins} vict.` : ''}</div>
             </div>
           </div>
         </div>
       `;
     }
 
-    const cardsHtml = friendsWithStats.map(f => {
+    const cardsHtml = rankedFriends.map((f, idx) => {
       const isMe = f.id === this.currentUserId;
 
       return `
         <div class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs flex items-center justify-between gap-3">
           <div class="flex items-center gap-3 min-w-0 flex-1">
-            <div class="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-200 shadow-2xs flex items-center justify-center shrink-0">
+            <div class="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-200 shadow-2xs flex items-center justify-center shrink-0 relative">
               ${getMeepleSvg(f, 24)}
+              ${idx < 3 && f.points > 0 ? `
+                <span class="absolute -top-1.5 -left-1.5 text-xs">
+                  ${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                </span>
+              ` : ''}
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5">
@@ -5142,11 +5538,15 @@ const app = {
                 ${isMe ? '<span class="text-[9px] font-extrabold bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full shrink-0">Tú</span>' : ''}
               </div>
               <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
-                <span class="font-bold text-amber-600"><i class="fa-solid fa-crown text-[9px]"></i> ${f.wins} vict. (${f.winRate}%)</span>
+                <span class="font-black text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded-md border border-amber-200"><i class="fa-solid fa-trophy text-[9px] text-amber-500"></i> ${f.points} pts</span>
+                <span>•</span>
+                <span class="font-bold text-slate-700"><i class="fa-solid fa-crown text-[9px] text-amber-500"></i> ${f.wins} vict.</span>
                 <span>•</span>
                 <span><i class="fa-solid fa-calendar-check text-[9px] text-slate-400"></i> ${f.attended} part.</span>
+                ${f.secondPlaces > 0 || f.thirdPlaces > 0 ? `
                 <span>•</span>
-                <span><i class="fa-solid fa-chess-rook text-[9px] text-slate-400"></i> ${f.owned} juego${f.owned !== 1 ? 's' : ''}</span>
+                <span class="text-slate-400">🥈x${f.secondPlaces} 🥉x${f.thirdPlaces}</span>
+                ` : ''}
               </div>
             </div>
           </div>
